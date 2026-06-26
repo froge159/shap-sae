@@ -65,9 +65,9 @@ def create_splits():
     val_ds = second_split["train"]
     shap_ds = second_split["test"]
 
-    train_indices = train_ds["original_index"]
-    val_indices = val_ds["original_index"]
-    shap_indices = shap_ds["original_index"]
+    train_indices = list(train_ds["original_index"])
+    val_indices = list(val_ds["original_index"])
+    shap_indices = list(shap_ds["original_index"])
 
     indices_dict = {
         "train_indices": train_indices,
