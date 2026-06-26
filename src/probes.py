@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
-LAYER = 10  # manually adjust
+LAYERS = tuple(range(7, 12))  # manually adjust
 
 
 def load_layer_activations(split_dir: Path, layer: int) -> tuple[np.ndarray, np.ndarray]:
@@ -50,36 +50,37 @@ def evaluate_probe(probe: LogisticRegression, X_val: np.ndarray, y_val: np.ndarr
 
 
 def main():
-    train_dir = Path("activations/probe_train")
-    val_dir = Path("activations/probe_val")
+    for LAYER in LAYERS:
+        train_dir = Path("activations/probe_train")
+        val_dir = Path("activations/probe_val")
 
-    X_train, y_train = load_layer_activations(train_dir, LAYER)
-    X_val, y_val = load_layer_activations(val_dir, LAYER)
+        X_train, y_train = load_layer_activations(train_dir, LAYER)
+        X_val, y_val = load_layer_activations(val_dir, LAYER)
 
-    probe = train_probe(X_train, y_train)
-    results = evaluate_probe(probe, X_val, y_val)
+        probe = train_probe(X_train, y_train)
+        results = evaluate_probe(probe, X_val, y_val)
 
-    
-    out_dir = Path("outputs") / f"layer_{LAYER}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    top_features_path = out_dir / "top_features.json"
-    with open(top_features_path, "w") as f:
-        # json.dump(results["top_features"], f, indent=2)
-        pass
+        
+        out_dir = Path("outputs") / f"layer_{LAYER}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        top_features_path = out_dir / "top_features.json"
+        with open(top_features_path, "w") as f:
+            # json.dump(results["top_features"], f, indent=2)
+            pass
 
-    print(f"Layer {LAYER} probe results")
-    print(f"  Val accuracy:        {results['accuracy']:.4f}")
-    print(f"  Non-zero weights:    {results['n_nonzero_weights']} / {results['n_features']}")
-    #print(f"  Top 20 features saved to {top_features_path}")
-    #print("  Top 20 features by |weight|:")
-    """
-    for rank, feat in enumerate(results["top_features"], start=1):
-        print(
-            f"    {rank:2d}. feature {feat['feature_idx']:5d}  "
-            f"weight {feat['weight']:+.6f}"
-        )
-    """
-
+        print(f"Layer {LAYER} probe results")
+        print(f"  Val accuracy:        {results['accuracy']:.4f}")
+        print(f"  Non-zero weights:    {results['n_nonzero_weights']} / {results['n_features']}")
+        #print(f"  Top 20 features saved to {top_features_path}")
+        #print("  Top 20 features by |weight|:")
+        """
+        for rank, feat in enumerate(results["top_features"], start=1):
+            print(
+                f"    {rank:2d}. feature {feat['feature_idx']:5d}  "
+                f"weight {feat['weight']:+.6f}"
+            )
+        """
+        print()
 
 if __name__ == "__main__":
     main()
