@@ -13,6 +13,7 @@ SAE_RELEASE = "gpt2-small-resid-post-v5-32k"
 
 
 def main():
+    # call create_splits() if first time running
     model = load_model()
     saes = load_saes()
     train_ds, val_ds, shap_ds = load_splits()
@@ -41,7 +42,7 @@ def load_saes():
 
 
 def load_splits():
-    ds = load_dataset("stanfordnlp/sst2", split="train")
+    ds = load_from_disk("data/sst2_train")
     with open("data/three_way_split_indices.json") as f:
         indices = json.load(f)
 
@@ -53,7 +54,7 @@ def load_splits():
 
 
 def create_splits():
-    ds = load_dataset("stanfordnlp/sst2", split="train")
+    ds = load_from_disk("data/sst2_train")
     ds_with_id = ds.add_column("original_index", range(len(ds)))
     first_split = ds_with_id.train_test_split(test_size=0.30, seed=42)
 
@@ -78,6 +79,8 @@ def create_splits():
     Path("data").mkdir(parents=True, exist_ok=True)
     with open("data/three_way_split_indices.json", "w") as f:
         json.dump(indices_dict, f, indent=4)
+
+    ds.save_to_disk("data/sst2_train")
 
     print("Dataset three-way split complete!")
     print(f"Train samples (70%): {len(train_indices)}")

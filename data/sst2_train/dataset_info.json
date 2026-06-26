@@ -1,0 +1,55 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "sst2",
+  "dataset_size": 5022007,
+  "description": "",
+  "download_size": 3331058,
+  "features": {
+    "idx": {
+      "dtype": "int32",
+      "_type": "Value"
+    },
+    "sentence": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "label": {
+      "names": [
+        "negative",
+        "positive"
+      ],
+      "_type": "ClassLabel"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 8353065,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 4698441,
+      "num_examples": 67349,
+      "dataset_name": "sst2"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 106470,
+      "num_examples": 872,
+      "dataset_name": "sst2"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 217096,
+      "num_examples": 1821,
+      "dataset_name": "sst2"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}
