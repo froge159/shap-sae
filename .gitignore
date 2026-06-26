@@ -1,1 +1,42 @@
+# Generated activations (large .npy files)
 activations/
+
+# Split indices are small — keep data/three_way_split_indices.json tracked
+# (only ignore cached/raw dataset dumps if you add them later)
+data/*.parquet
+data/*.npy
+data/*.pt
+data/*.pth
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# uv
+.python-version
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+.env.*
+
+# ML artifacts (future probe/checkpoint outputs)
+checkpoints/
+models/
+results/
+*.pt
+*.pth
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

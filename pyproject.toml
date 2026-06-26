@@ -1,0 +1,13 @@
+[project]
+name = "shap-sae"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "datasets>=5.0.0",
+    "sae-lens>=6.44.4",
+    "scikit-learn>=1.9.0",
+    "torch>=2.12.1",
+    "transformer-lens>=3.3.0",
+]
