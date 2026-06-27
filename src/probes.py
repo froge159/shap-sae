@@ -18,7 +18,7 @@ def load_layer_activations(split_dir: Path, layer: int) -> tuple[np.ndarray, np.
 def train_probe(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
     probe = LogisticRegression(
         max_iter=100,
-        C=0.01,
+        C=1,
         solver="liblinear", # change
         penalty="l1",
         verbose=1,
