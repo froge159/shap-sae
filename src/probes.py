@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
-LAYERS = tuple(range(7, 12))  # manually adjust
+LAYERS = tuple(range(7, 8))  # manually adjust
 
 
 def load_layer_activations(split_dir: Path, layer: int) -> tuple[np.ndarray, np.ndarray]:
@@ -64,23 +64,23 @@ def main():
         out_dir = Path("outputs") / f"layer_{LAYER}"
         out_dir.mkdir(parents=True, exist_ok=True)
         top_features_path = out_dir / "top_features.json"
+        
         with open(top_features_path, "w") as f:
-            # json.dump(results["top_features"], f, indent=2)
-            pass
+            json.dump(results["top_features"], f, indent=2)
 
         print(f"Layer {LAYER} probe results")
         print(f"  Val accuracy:        {results['accuracy']:.4f}")
         print(f"  Non-zero weights:    {results['n_nonzero_weights']} / {results['n_features']}")
-        #print(f"  Top 20 features saved to {top_features_path}")
-        #print("  Top 20 features by |weight|:")
-        """
+        print(f"  Top 20 features saved to {top_features_path}")
+        print("  Top 20 features by |weight|:")
+        
         for rank, feat in enumerate(results["top_features"], start=1):
             print(
                 f"    {rank:2d}. feature {feat['feature_idx']:5d}  "
                 f"weight {feat['weight']:+.6f}"
             )
-        """
-        print()
+        
+        
 
 if __name__ == "__main__":
     main()
