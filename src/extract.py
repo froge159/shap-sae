@@ -13,7 +13,6 @@ SAE_RELEASE = "gpt2-small-resid-post-v5-32k"
 
 
 def main():
-    # call create_splits() if first time running
     model = load_model()
     saes = load_saes()
     train_ds, val_ds, shap_ds = load_splits()
