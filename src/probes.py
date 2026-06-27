@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
-LAYERS = tuple(range(10, 11))  # manually adjust
+LAYERS = tuple(range(7, 12))  # manually adjust
 
 
 def load_layer_activations(split_dir: Path, layer: int) -> tuple[np.ndarray, np.ndarray]:
@@ -18,8 +18,8 @@ def load_layer_activations(split_dir: Path, layer: int) -> tuple[np.ndarray, np.
 def train_probe(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
     probe = LogisticRegression(
         max_iter=1000,
-        C=10,
-        solver="liblinear", # change
+        C=1,
+        solver="liblinear",
         penalty="l1",
         verbose=1,
     )
