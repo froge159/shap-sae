@@ -18,11 +18,10 @@ def load_layer_activations(split_dir: Path, layer: int) -> tuple[np.ndarray, np.
 def train_probe(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
     probe = LogisticRegression(
         max_iter=100,
-        C=0.1,
+        C=0.01,
         solver="liblinear", # change
         penalty="l1",
         verbose=1,
-        n_jobs=-1,
     )
     probe.fit(X_train, y_train)
     return probe
@@ -59,14 +58,9 @@ def main():
         X_train, y_train = load_layer_activations(train_dir, LAYER)
         X_val, y_val = load_layer_activations(val_dir, LAYER)
 
-        print(f"Sparsity: {(X_train == 0).mean():.3f}") # change
-        print(f"X_train shape: {X_train.shape}")
-        print(f"X_train dtype: {X_train.dtype}")
-
         probe = train_probe(X_train, y_train)
         results = evaluate_probe(probe, X_val, y_val, LAYER)
 
-        
         out_dir = Path("outputs") / f"layer_{LAYER}"
         out_dir.mkdir(parents=True, exist_ok=True)
         top_features_path = out_dir / "top_features.json"
