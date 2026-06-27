@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
-LAYERS = tuple(range(7, 12))  # manually adjust
+LAYERS = tuple(range(10, 11))  # manually adjust
 
 
 def load_layer_activations(split_dir: Path, layer: int) -> tuple[np.ndarray, np.ndarray]:
@@ -17,16 +17,18 @@ def load_layer_activations(split_dir: Path, layer: int) -> tuple[np.ndarray, np.
 
 def train_probe(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
     probe = LogisticRegression(
-        max_iter=1000,
-        C=0.01,
+        max_iter=100,
+        C=0.1,
         solver="saga",
         penalty="l1",
+        verbose=1,
+        n_jobs=-1,
     )
     probe.fit(X_train, y_train)
     return probe
 
 
-def evaluate_probe(probe: LogisticRegression, X_val: np.ndarray, y_val: np.ndarray) -> dict:
+def evaluate_probe(probe: LogisticRegression, X_val: np.ndarray, y_val: np.ndarray, layer: int) -> dict:
     y_pred = probe.predict(X_val)
     accuracy = accuracy_score(y_val, y_pred)
 
@@ -41,7 +43,7 @@ def evaluate_probe(probe: LogisticRegression, X_val: np.ndarray, y_val: np.ndarr
     ]
 
     return {
-        "layer": LAYER,
+        "layer": layer,
         "accuracy": float(accuracy),
         "n_nonzero_weights": n_nonzero,
         "n_features": int(len(weights)),
@@ -58,7 +60,7 @@ def main():
         X_val, y_val = load_layer_activations(val_dir, LAYER)
 
         probe = train_probe(X_train, y_train)
-        results = evaluate_probe(probe, X_val, y_val)
+        results = evaluate_probe(probe, X_val, y_val, LAYER)
 
         
         out_dir = Path("outputs") / f"layer_{LAYER}"
