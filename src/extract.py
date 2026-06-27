@@ -1,7 +1,7 @@
 from sae_lens import SAE, HookedSAETransformer
 import torch
 import json
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
