@@ -29,7 +29,6 @@ venv/
 .env.*
 
 # ML artifacts (future probe/checkpoint outputs)
-checkpoints/
 models/
 results/
 *.pt

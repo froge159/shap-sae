@@ -1,0 +1,142 @@
+iter   1  #CD cycles 1
+iter   2  #CD cycles 1
+iter   3  #CD cycles 3
+iter   4  #CD cycles 1
+iter   5  #CD cycles 4
+iter   6  #CD cycles 1
+iter   7  #CD cycles 11
+iter   8  #CD cycles 1
+iter   9  #CD cycles 49
+iter  10  #CD cycles 3
+iter  11  #CD cycles 3
+iter  12  #CD cycles 1
+iter  13  #CD cycles 200
+iter  14  #CD cycles 16
+iter  15  #CD cycles 1
+iter  16  #CD cycles 343
+iter  17  #CD cycles 12
+iter  18  #CD cycles 2
+iter  19  #CD cycles 1
+iter  20  #CD cycles 397
+=========================
+optimization finished, #iter = 20
+Objective value = 13690.534205
+#nonzeros/#features = 7423/32769
+[LibLinear]Layer 7 probe results
+  Val accuracy:        0.8244
+  Non-zero weights:    7422 / 32768
+
+iter   1  #CD cycles 1
+iter   2  #CD cycles 1
+iter   3  #CD cycles 3
+iter   4  #CD cycles 1
+iter   5  #CD cycles 4
+iter   6  #CD cycles 1
+iter   7  #CD cycles 12
+iter   8  #CD cycles 4
+iter   9  #CD cycles 1
+iter  10  #CD cycles 42
+iter  11  #CD cycles 38
+iter  12  #CD cycles 10
+iter  13  #CD cycles 6
+iter  14  #CD cycles 1
+iter  15  #CD cycles 158
+iter  16  #CD cycles 29
+iter  17  #CD cycles 26
+iter  18  #CD cycles 13
+iter  19  #CD cycles 9
+iter  20  #CD cycles 11
+iter  21  #CD cycles 1
+iter  22  #CD cycles 492
+iter  23  #CD cycles 18
+iter  24  #CD cycles 9
+iter  25  #CD cycles 1
+iter  26  #CD cycles 573
+=========================
+optimization finished, #iter = 26
+Objective value = 15388.818337
+#nonzeros/#features = 7046/32769
+[LibLinear]Layer 8 probe results
+  Val accuracy:        0.8102
+  Non-zero weights:    7045 / 32768
+
+iter   1  #CD cycles 1
+iter   2  #CD cycles 1
+iter   3  #CD cycles 3
+iter   4  #CD cycles 1
+iter   5  #CD cycles 4
+iter   6  #CD cycles 1
+iter   7  #CD cycles 13
+iter   8  #CD cycles 1
+iter   9  #CD cycles 32
+iter  10  #CD cycles 4
+iter  11  #CD cycles 1
+iter  12  #CD cycles 82
+iter  13  #CD cycles 14
+iter  14  #CD cycles 1
+iter  15  #CD cycles 331
+iter  16  #CD cycles 5
+iter  17  #CD cycles 6
+iter  18  #CD cycles 1
+iter  19  #CD cycles 400
+=========================
+optimization finished, #iter = 19
+Objective value = 16885.743810
+#nonzeros/#features = 6919/32769
+[LibLinear]Layer 9 probe results
+  Val accuracy:        0.7865
+  Non-zero weights:    6918 / 32768
+
+iter   1  #CD cycles 1
+iter   2  #CD cycles 1
+iter   3  #CD cycles 3
+iter   4  #CD cycles 1
+iter   5  #CD cycles 5
+iter   6  #CD cycles 1
+iter   7  #CD cycles 14
+iter   8  #CD cycles 1
+iter   9  #CD cycles 38
+iter  10  #CD cycles 3
+iter  11  #CD cycles 1
+iter  12  #CD cycles 83
+iter  13  #CD cycles 6
+iter  14  #CD cycles 1
+iter  15  #CD cycles 296
+iter  16  #CD cycles 25
+iter  17  #CD cycles 5
+iter  18  #CD cycles 1
+iter  19  #CD cycles 277
+=========================
+optimization finished, #iter = 19
+Objective value = 18792.570297
+#nonzeros/#features = 6546/32769
+[LibLinear]Layer 10 probe results
+  Val accuracy:        0.7689
+  Non-zero weights:    6545 / 32768
+
+iter   1  #CD cycles 1
+iter   2  #CD cycles 1
+iter   3  #CD cycles 3
+iter   4  #CD cycles 1
+iter   5  #CD cycles 4
+iter   6  #CD cycles 1
+iter   7  #CD cycles 14
+iter   8  #CD cycles 1
+iter   9  #CD cycles 47
+iter  10  #CD cycles 5
+iter  11  #CD cycles 11
+iter  12  #CD cycles 1
+iter  13  #CD cycles 217
+iter  14  #CD cycles 11
+iter  15  #CD cycles 1
+iter  16  #CD cycles 291
+iter  17  #CD cycles 4
+iter  18  #CD cycles 2
+iter  19  #CD cycles 1
+=========================
+optimization finished, #iter = 19
+Objective value = 21608.430967
+#nonzeros/#features = 5118/32769
+[LibLinear]Layer 11 probe results
+  Val accuracy:        0.7441
+  Non-zero weights:    5117 / 32768
