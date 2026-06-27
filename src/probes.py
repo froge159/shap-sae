@@ -61,10 +61,18 @@ def main():
         probe = train_probe(X_train, y_train)
         results = evaluate_probe(probe, X_val, y_val, LAYER)
 
+
+        # save probe weights
+        out_dir = Path("outputs") / f"layer_{LAYER}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        weights_path = out_dir / "weights.npy"
+        np.save(weights_path, probe.coef_[0])
+        """
+
         out_dir = Path("outputs") / f"layer_{LAYER}"
         out_dir.mkdir(parents=True, exist_ok=True)
         top_features_path = out_dir / "top_features.json"
-        
+
         with open(top_features_path, "w") as f:
             json.dump(results["top_features"], f, indent=2)
 
@@ -79,7 +87,7 @@ def main():
                 f"    {rank:2d}. feature {feat['feature_idx']:5d}  "
                 f"weight {feat['weight']:+.6f}"
             )
-        
+        """
         
 
 if __name__ == "__main__":
