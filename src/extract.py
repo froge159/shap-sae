@@ -8,7 +8,7 @@ from pathlib import Path
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-TARGET_LAYERS = tuple(range(7, 12))
+TARGET_LAYERS = tuple(range(7, 8)) # adjust this to the layers you want to extract activations from
 SAE_RELEASE = "gpt2-small-resid-post-v5-32k"
 
 

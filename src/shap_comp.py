@@ -10,7 +10,7 @@ def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=100
     """
     rng = np.random.default_rng(seed)
     
-    test_activations = np.load(f"{activations_dir}/probe_val/layer_{layer}/activations.npy")
+    #test_activations = np.load(f"{activations_dir}/probe_val/layer_{layer}/activations.npy")
     train_activations = np.load(f"{activations_dir}/probe_train/layer_{layer}/activations.npy")
     shap_activations = np.load(f"{activations_dir}/shap/layer_{layer}/activations.npy")
     
@@ -42,50 +42,51 @@ def get_shap_feature_mask(probe, activations: np.ndarray,  min_activation_freq: 
     return feature_indices
 
 
-def make_probe_predict_fn(probe, feature_indices: np.ndarray):
-    """
-    Returns a function that takes a (n_samples, n_filtered_features) array
-    and returns predicted probabilities for the positive class.
-    """
+def make_probe_predict_fn(
+    probe,
+    feature_indices: np.ndarray,
+    instance_full: np.ndarray,  # shape (32768,) — one SHAP eval example
+):
+    n_total = instance_full.shape[0]
+
     def predict_fn(X_filtered):
-        # X_filtered has only the filtered features; reconstruct full vector
-        # KernelSHAP passes numpy arrays
-        return probe.predict_proba(X_filtered)[:, 1]
-    
+        # X_filtered: (n_coalitions, len(feature_indices))
+        X_full = np.repeat(instance_full[np.newaxis, :], X_filtered.shape[0], axis=0)
+        X_full[:, feature_indices] = X_filtered
+        return probe.predict_proba(X_full)[:, 1]
+
     return predict_fn
 
 
 def run_kernelshap(
     probe,
-    shap_eval: np.ndarray,       # shape: (n_eval, 32768)
-    background: np.ndarray,      # shape: (100, 32768)
-    feature_indices: np.ndarray, # indices of filtered features
+    shap_eval: np.ndarray,
+    background: np.ndarray,
+    feature_indices: np.ndarray,
     n_shap_samples: int = 500,
     seed: int = 42,
 ) -> np.ndarray:
-    """
-    Returns shap_values of shape (n_eval, n_filtered_features).
-    """
-    # Slice to filtered features only
     shap_eval_filtered = shap_eval[:, feature_indices]
     background_filtered = background[:, feature_indices]
-    
-    predict_fn = make_probe_predict_fn(probe, feature_indices)
-    
-    explainer = shap.KernelExplainer(
-        predict_fn,
-        background_filtered,
-        seed=seed,
-    )
-    
-    # nsamples controls the coalition sampling budget per explanation
-    shap_values = explainer.shap_values(
-        shap_eval_filtered,
-        nsamples=n_shap_samples,
-        silent=False,   # shows progress bar
-    )
-    # shap_values shape: (n_eval, n_filtered_features)
-    return shap_values
+
+    all_shap_values = []
+    for i in range(len(shap_eval)):
+        predict_fn = make_probe_predict_fn(probe, feature_indices, shap_eval[i])
+
+        explainer = shap.KernelExplainer(
+            predict_fn,
+            background_filtered,
+            seed=seed,
+        )
+
+        sv = explainer.shap_values(
+            shap_eval_filtered[i : i + 1],
+            nsamples=n_shap_samples,
+            silent=False,
+        )
+        all_shap_values.append(np.asarray(sv))
+
+    return np.vstack(all_shap_values)  # (n_eval, n_filtered_features)
 
 
 def build_attribution_matrix(
@@ -110,8 +111,8 @@ def get_top_shap_features(Phi: np.ndarray, k: int = 50):
     return top_k_idx, Phi[top_k_idx]
 
 
-def main():
-    probe = joblib.load(f"{checkpoint_dir}/probe_layer7.joblib") 
+def main(checkpoint_dir: str):
+    probe = joblib.load(f"{checkpoint_dir}/probe_layer_7.joblib") 
     shap_eval, background = prepare_shap_inputs()
     feature_indices = get_shap_feature_mask(probe, shap_eval)
     shap_values = run_kernelshap(probe, shap_eval, background, feature_indices)
@@ -130,4 +131,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(checkpoint_dir="checkpoints")

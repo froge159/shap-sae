@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
+import joblib
 
 LAYERS = tuple(range(7, 8))  # manually adjust
 
@@ -62,11 +63,9 @@ def main():
         results = evaluate_probe(probe, X_val, y_val, LAYER)
 
 
-        # save probe weights
-        out_dir = Path("outputs") / f"layer_{LAYER}"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        weights_path = out_dir / "weights.npy"
-        np.save(weights_path, probe.coef_[0])
+        # save probe as joblib file
+        out_dir = Path("checkpoints")
+        joblib.dump(probe, out_dir / f"probe_layer_{LAYER}.joblib")
         """
 
         out_dir = Path("outputs") / f"layer_{LAYER}"
