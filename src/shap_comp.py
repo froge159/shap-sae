@@ -2,9 +2,10 @@ import numpy as np
 import shap
 import joblib
 from sklearn.pipeline import Pipeline
+from tqdm import tqdm
 
 
-def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=100, n_shap=200, seed=42):
+def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=250, n_shap=200, seed=42): # change n_shap to full split size (check first)
     """
     activations: shape (N_sentences, 32768)
     """
@@ -18,7 +19,6 @@ def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=100
     bg_idx = rng.choice(len(train_activations), size=n_background, replace=False)
     background = train_activations[bg_idx]        # shape: (100, 32768)
     
-    # SHAP evaluation set: start with 200 val examples, then scale up to 1000
     shap_idx = rng.choice(len(shap_activations), size=n_shap, replace=False)
     shap_eval = shap_activations[shap_idx]         # shape: (200, 32768)
     
@@ -45,12 +45,12 @@ def get_shap_feature_mask(probe, activations: np.ndarray,  min_activation_freq: 
 def make_probe_predict_fn(
     probe,
     feature_indices: np.ndarray,
-    instance_full: np.ndarray,  # shape (32768,) — one SHAP eval example
+    shap_eval: np.ndarray,
+    instance_idx: dict,
 ):
-    n_total = instance_full.shape[0]
-
     def predict_fn(X_filtered):
         # X_filtered: (n_coalitions, len(feature_indices))
+        instance_full = shap_eval[instance_idx["i"]]
         X_full = np.repeat(instance_full[np.newaxis, :], X_filtered.shape[0], axis=0)
         X_full[:, feature_indices] = X_filtered
         return probe.predict_proba(X_full)[:, 1]
@@ -63,30 +63,32 @@ def run_kernelshap(
     shap_eval: np.ndarray,
     background: np.ndarray,
     feature_indices: np.ndarray,
-    n_shap_samples: int = 500,
+    n_shap_samples: int | str= "auto",
     seed: int = 42,
+    silent: bool = False,
 ) -> np.ndarray:
     shap_eval_filtered = shap_eval[:, feature_indices]
     background_filtered = background[:, feature_indices]
 
-    all_shap_values = []
-    for i in range(len(shap_eval)):
-        predict_fn = make_probe_predict_fn(probe, feature_indices, shap_eval[i])
+    instance_idx = {"i": 0}
+    predict_fn = make_probe_predict_fn(probe, feature_indices, shap_eval, instance_idx)
+    explainer = shap.KernelExplainer(
+        predict_fn,
+        background_filtered,
+        seed=seed,
+    )
 
-        explainer = shap.KernelExplainer(
-            predict_fn,
-            background_filtered,
-            seed=seed,
+    explanations = []
+    for i in tqdm(range(len(shap_eval_filtered)), disable=silent):
+        instance_idx["i"] = i
+        explanations.append(
+            explainer.explain(
+                shap_eval_filtered[i : i + 1],
+                nsamples=n_shap_samples,
+            )
         )
 
-        sv = explainer.shap_values(
-            shap_eval_filtered[i : i + 1],
-            nsamples=n_shap_samples,
-            silent=False,
-        )
-        all_shap_values.append(np.asarray(sv))
-
-    return np.vstack(all_shap_values)  # (n_eval, n_filtered_features)
+    return np.vstack(explanations)  # (n_eval, n_filtered_features)
 
 
 def build_attribution_matrix(
