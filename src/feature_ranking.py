@@ -29,7 +29,7 @@ def integrated_gradients(
         grads = grad_scalar[:, None] * probe.coef_[0]  # (n_steps, 65)
         
         # Integrate (trapezoidal rule) and multiply by (x - baseline)
-        avg_grads = np.trapz(grads, alphas, axis=0)    # (65,)
+        avg_grads = np.trapezoid(grads, alphas, axis=0)    # (65,)
         ig = (x - baseline) * avg_grads                # (65,)
         all_ig.append(ig)
     
@@ -104,7 +104,8 @@ if __name__ == "__main__":
     probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(probe_scores, ig_scores, ga_scores, shap_scores)
     compare_rankings(probe_ranks, ig_ranks, shap_ranks, ga_ranks)
 
-    # save everything
+    # save everything, create directory if it doesn't exist
+    os.makedirs("outputs/rankings", exist_ok=True)
     np.save("outputs/rankings/ig_scores.npy", ig_scores)
     np.save("outputs/rankings/ga_scores.npy", ga_scores)
     
