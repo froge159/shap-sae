@@ -1,3 +1,6 @@
+import sys
+import warnings
+
 import numpy as np
 import shap
 import joblib
@@ -5,7 +8,7 @@ from sklearn.pipeline import Pipeline
 from tqdm import tqdm
 
 
-def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=250, n_shap=10103, seed=42): # change n_shap to full split size (check first)
+def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=100, n_shap=500, seed=42): # change n_shap to full split size (check first)
     """
     activations: shape (N_sentences, 32768)
     """
@@ -23,7 +26,7 @@ def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=250
     shap_idx = rng.choice(len(shap_activations), size=n_shap, replace=False)
     shap_eval = shap_activations[shap_idx]         # shape: (n_shap, 32768)
     
-    return shap_eval, background
+    return shap_eval, background, bg_idx
 
 
 def get_shap_feature_mask(probe, activations: np.ndarray,  min_activation_freq: float = 0.05):
@@ -64,7 +67,7 @@ def run_kernelshap(
     shap_eval: np.ndarray,
     background: np.ndarray,
     feature_indices: np.ndarray,
-    n_shap_samples: int | str= "auto",
+    n_shap_samples: int | str=256,
     seed: int = 42,
     silent: bool = False,
 ) -> np.ndarray:
@@ -80,14 +83,25 @@ def run_kernelshap(
     )
 
     explanations = []
-    for i in tqdm(range(len(shap_eval_filtered)), disable=silent):
-        instance_idx["i"] = i
-        explanations.append(
-            explainer.explain(
-                shap_eval_filtered[i : i + 1],
-                nsamples=n_shap_samples,
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        iterator = range(len(shap_eval_filtered))
+        if not silent:
+            iterator = tqdm(
+                iterator,
+                file=sys.stderr,
+                dynamic_ncols=False,
+                ncols=100,
+                mininterval=1.0,
             )
-        )
+        for i in iterator:
+            instance_idx["i"] = i
+            explanations.append(
+                explainer.explain(
+                    shap_eval_filtered[i : i + 1],
+                    nsamples=n_shap_samples,
+                )
+            )
 
     return np.vstack(explanations)  # (n_eval, n_filtered_features)
 
@@ -114,9 +128,12 @@ def get_top_shap_features(Phi: np.ndarray, k: int = 50):
     return top_k_idx, Phi[top_k_idx]
 
 
+
 def main(checkpoint_dir: str):
-    probe = joblib.load(f"{checkpoint_dir}/probe_layer_7.joblib") 
-    shap_eval, background = prepare_shap_inputs()
+    
+    probe = joblib.load(f"{checkpoint_dir}/probe_layer_7.joblib")
+    probe.verbose = 0
+    shap_eval, background, bg_idx = prepare_shap_inputs()
     feature_indices = get_shap_feature_mask(probe, shap_eval)
     shap_values = run_kernelshap(probe, shap_eval, background, feature_indices)
     Phi = build_attribution_matrix(shap_values, feature_indices)
@@ -130,7 +147,7 @@ def main(checkpoint_dir: str):
     np.save("outputs/phi_sentiment_layer7.npy", Phi)
     np.save("outputs/top_k_idx_layer7.npy", top_k_idx)
     np.save("outputs/top_k_Phi_layer7.npy", top_k_Phi)
-    
+    np.save("outputs/background_indices_layer7.npy", bg_idx)
 
 
 if __name__ == "__main__":

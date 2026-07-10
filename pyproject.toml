@@ -7,9 +7,11 @@ requires-python = ">=3.14"
 dependencies = [
     "datasets>=5.0.0",
     "joblib>=1.5.3",
+    "numpy>=2.3.5",
     "sae-lens>=6.44.4",
     "scikit-learn>=1.9.0",
     "shap>=0.52.0",
     "torch>=2.12.1",
+    "tqdm>=4.68.3",
     "transformer-lens>=3.3.0",
 ]

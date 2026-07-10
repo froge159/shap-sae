@@ -21,8 +21,8 @@ def train_probe(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
         max_iter=1000,
         C=1,
         solver="liblinear",
-        penalty="l1",
-        verbose=1,
+        l1_ratio=1,
+        verbose=0,
     )
     probe.fit(X_train, y_train)
     return probe
