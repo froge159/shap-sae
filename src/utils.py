@@ -19,3 +19,16 @@ def load_splits():
     shap_ds  = ds.select(indices["shap_indices"])
 
     return train_ds, val_ds, shap_ds
+
+
+
+# open three_way_split_indices.json and count number of indices in each split
+def count_indices():
+    with open("data/three_way_split_indices.json") as f:
+        indices = json.load(f)
+    print(len(indices["train_indices"]))
+    print(len(indices["val_indices"]))
+    print(len(indices["shap_indices"]))
+
+if __name__ == "__main__":
+    count_indices()

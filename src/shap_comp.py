@@ -5,7 +5,7 @@ from sklearn.pipeline import Pipeline
 from tqdm import tqdm
 
 
-def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=250, n_shap=200, seed=42): # change n_shap to full split size (check first)
+def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=250, n_shap=10103, seed=42): # change n_shap to full split size (check first)
     """
     activations: shape (N_sentences, 32768)
     """
@@ -15,12 +15,13 @@ def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=250
     train_activations = np.load(f"{activations_dir}/probe_train/layer_{layer}/activations.npy")
     shap_activations = np.load(f"{activations_dir}/shap/layer_{layer}/activations.npy")
     
-    # Fixed background: 100 training examples
+    # Fixed background:
     bg_idx = rng.choice(len(train_activations), size=n_background, replace=False)
-    background = train_activations[bg_idx]        # shape: (100, 32768)
+    background = train_activations[bg_idx]        # shape: (n_background, 32768)
     
+    # SHAP samples:
     shap_idx = rng.choice(len(shap_activations), size=n_shap, replace=False)
-    shap_eval = shap_activations[shap_idx]         # shape: (200, 32768)
+    shap_eval = shap_activations[shap_idx]         # shape: (n_shap, 32768)
     
     return shap_eval, background
 
@@ -123,13 +124,13 @@ def main(checkpoint_dir: str):
     print(top_k_idx)
     print(top_k_Phi)
 
-    """
+    
     np.save("outputs/shap_values_raw.npy", shap_values)
     np.save("outputs/shap_feature_indices.npy", feature_indices)
     np.save("outputs/phi_sentiment_layer7.npy", Phi)
     np.save("outputs/top_k_idx_layer7.npy", top_k_idx)
     np.save("outputs/top_k_Phi_layer7.npy", top_k_Phi)
-    """
+    
 
 
 if __name__ == "__main__":
