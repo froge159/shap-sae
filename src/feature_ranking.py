@@ -2,6 +2,7 @@ import joblib
 from scipy.stats import spearmanr
 import numpy as np
 from tqdm import tqdm
+import os
 
 def integrated_gradients(
     probe,
@@ -108,4 +109,4 @@ if __name__ == "__main__":
     os.makedirs("outputs/rankings", exist_ok=True)
     np.save("outputs/rankings/ig_scores.npy", ig_scores)
     np.save("outputs/rankings/ga_scores.npy", ga_scores)
-    
+    sc
