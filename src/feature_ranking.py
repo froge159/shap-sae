@@ -103,7 +103,7 @@ def feature_ranking(probe, train_activations, feature_indices, Phi):
 
 
 """
-Ablation
+Probe Ablation
 """
 
 def get_ablation_candidates(probe_ranks, ig_ranks, shap_ranks, ga_ranks, feature_indices, k=20):
@@ -118,11 +118,16 @@ def get_ablation_candidates(probe_ranks, ig_ranks, shap_ranks, ga_ranks, feature
     return all_candidates, shap_top, probe_top, ig_top, ga_top
 
 def ablate(probe, activations, candidate_indices):
-    # return dict {index: mean delta probability}
     delta_probabilities = {}
+    baseline_probs = probe.predict_proba(activations)[:, 1]  # (n_samples,)
+    
     for index in candidate_indices:
-        delta_probability = probe.predict_proba(activations[:, index])[0][1] - probe.predict_proba(activations[:, index])[0][0]
-        delta_probabilities[index] = delta_probability
+        ablated = activations.copy()
+        ablated[:, index] = 0.0
+        ablated_probs = probe.predict_proba(ablated)[:, 1]
+        delta = np.mean(np.abs(ablated_probs - baseline_probs))
+        delta_probabilities[index] = delta
+    
     return delta_probabilities
 
 def faithfulness_correlation(method_scores, feature_indices, ablation_effects):
@@ -135,6 +140,7 @@ def faithfulness_correlation(method_scores, feature_indices, ablation_effects):
     
     rho, p = spearmanr(scores, effects)
     return rho, p
+
 
 
 
@@ -158,12 +164,12 @@ if __name__ == "__main__":
     np.save("outputs/rankings/ga_scores.npy", ga_scores)
     """
 
-    # Ablation
+    # Probe Ablation
     probe_scores = np.abs(probe.coef_[0][feature_indices])
     ig_scores = np.load("outputs/rankings/ig_scores.npy")
     ga_scores = np.load("outputs/rankings/ga_scores.npy")
-    shap_scores = np.load("outputs/shap/phi_sentiment_layer7.npy")
-    probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(probe_scores, ig_scores, ga_scores, shap_scores)
+    shap_scores = np.load("outputs/shap/phi_sentiment_layer7.npy")[feature_indices]
+    probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores)
     val_activations = np.load("activations/probe_val/layer_7/activations.npy")
 
     all_candidates, shap_top, probe_top, ig_top, ga_top = get_ablation_candidates(probe_ranks, ig_ranks, shap_ranks, ga_ranks, feature_indices, k=20) # adjust k
