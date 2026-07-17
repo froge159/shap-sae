@@ -152,7 +152,7 @@ if __name__ == "__main__":
     Phi = np.load("outputs/shap/phi_sentiment_layer7.npy")
 
     # Feature ranking
-    """
+    
     ig_scores, ga_scores, probe_scores, shap_scores = feature_ranking(probe, train_activations, feature_indices, Phi)
 
     probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(probe_scores, ig_scores, ga_scores, shap_scores)
@@ -162,9 +162,10 @@ if __name__ == "__main__":
     os.makedirs("outputs/rankings", exist_ok=True)
     np.save("outputs/rankings/ig_scores.npy", ig_scores)
     np.save("outputs/rankings/ga_scores.npy", ga_scores)
-    """
+    
 
     # Probe Ablation
+    """
     probe_scores = np.abs(probe.coef_[0][feature_indices])
     ig_scores = np.load("outputs/rankings/ig_scores.npy")
     ga_scores = np.load("outputs/rankings/ga_scores.npy")
@@ -192,3 +193,4 @@ if __name__ == "__main__":
     # save delta_probabilities
     os.makedirs("outputs/ablation", exist_ok=True)
     np.save("outputs/ablation/delta_probabilities.npy", delta_probabilities)
+    """
