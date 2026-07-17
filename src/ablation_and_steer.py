@@ -12,11 +12,6 @@ from transformer_lens import HookedTransformer
 from utils import load_model, load_splits
 
 
-"""
-Feature ranking
-"""
-
-
 def compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores):
     # Convert scores to ranks (rank 1 = most important)
     def scores_to_ranks(scores):
@@ -124,15 +119,62 @@ def collect_last_token_residuals(
             with torch.no_grad():
                 _, cache = model.run_with_cache(tokens, names_filter=hook_point)
             resid = cache[hook_point]
-            rows.append(pool_last_non_pad_token(tokens, resid, pad_id))
+            pooled = pool_last_non_pad_token(tokens, resid, pad_id)
+            if pooled.ndim == 1:
+                pooled = pooled[None, :]
+            rows.append(pooled)
 
-    return np.asarray(rows, dtype=np.float32)
+    return np.concatenate(rows, axis=0).astype(np.float32)
 
 
+def train_residual_probe(
+    model: HookedTransformer,
+    tokens_list,
+    labels: np.ndarray,
+    layer: int,
+    checkpoint_path: str | None = None,
+) -> LogisticRegression:
+    """Train a logistic probe on last-token residual stream at `layer`."""
+    X = collect_last_token_residuals(model, tokens_list, layer)
+    probe = LogisticRegression(max_iter=1000, C=1.0, solver="liblinear", verbose=0)
+    probe.fit(X, labels)
+    if checkpoint_path is not None:
+        Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(probe, checkpoint_path)
+    return probe
 
 
+def load_or_train_residual_probe(
+    model: HookedTransformer,
+    tokens_list,
+    labels: np.ndarray,
+    layer: int,
+    checkpoint_path: str,
+) -> LogisticRegression:
+    if os.path.exists(checkpoint_path):
+        return joblib.load(checkpoint_path)
+    print(f"Training residual probe at layer {layer} → {checkpoint_path}")
+    return train_residual_probe(model, tokens_list, labels, layer, checkpoint_path)
 
-def get_model_ablation_effects(
+
+def _apply_feature_intervention(
+    acts: torch.Tensor,
+    feature_idx: int,
+    mode: str,
+    steering_coefficient: float,
+) -> torch.Tensor:
+    """Zero or scale one feature at every token position on a cloned tensor."""
+    acts = acts.clone()
+    if mode == "ablation":
+        acts[..., feature_idx] = 0.0
+    elif mode == "steering":
+        acts[..., feature_idx] *= steering_coefficient
+    else:
+        raise ValueError(f"Unknown mode={mode!r}; expected 'ablation' or 'steering'")
+    return acts
+
+
+def get_model_intervention_effects(
     model: HookedTransformer,
     sae: SAE,
     readout_probe,
@@ -140,22 +182,29 @@ def get_model_ablation_effects(
     candidate_indices: np.ndarray,
     layer: int = 7,
     readout_layer: int | None = None,
+    mode: str = "ablation",
+    steering_coefficient: float = 2.0,
 ) -> dict:
     """
-    Ablate SAE features at `layer` and measure mean |ΔP| on a downstream residual probe.
+    Intervene on SAE features at `layer` and measure mean |ΔP| on a downstream residual probe.
 
-    Intervention: encode → zero feature → decode into resid_post at `layer`.
+    mode="ablation": encode → zero feature → decode into resid_post.
+    mode="steering": encode → multiply the feature by `steering_coefficient`
+    at every token position → decode.
+
     Readout: last-non-pad residual at `readout_layer` (default: final layer),
     scored by `readout_probe` trained on residual stream (d_model,).
 
-    Baseline runs encode→decode with no zeroing so ΔP is not confounded by
-    SAE reconstruction error. Downstream readout lets the ablation propagate
+    Baseline runs encode→decode with no feature edit so ΔP is not confounded by
+    SAE reconstruction error. Downstream readout lets the intervention propagate
     through later layers before measurement.
     """
+    if mode not in ("ablation", "steering"):
+        raise ValueError(f"Unknown mode={mode!r}; expected 'ablation' or 'steering'")
     if readout_layer is None:
         readout_layer = model.cfg.n_layers - 1
 
-    ablate_point = f"blocks.{layer}.hook_resid_post"
+    intervene_point = f"blocks.{layer}.hook_resid_post"
     readout_point = f"blocks.{readout_layer}.hook_resid_post"
     pad_id = _pad_token_id(model)
     delta_probabilities = {}
@@ -172,46 +221,106 @@ def get_model_ablation_effects(
         pooled = pool_last_non_pad_token(tokens, resid_store["resid"], pad_id)
         return float(readout_probe.predict_proba(pooled.reshape(1, -1))[0, 1])
 
-    # SAE-reconstruction baseline (no feature zeroing), readout downstream
+    # SAE-reconstruction baseline (no feature edit), readout downstream
     baseline_probs = []
     for tokens in tqdm(tokens_list, desc="Computing baselines"):
         tokens = _as_batch(tokens, model.cfg.device)
         with torch.no_grad():
             with model.hooks(
-                fwd_hooks=[(ablate_point, recon_hook), (readout_point, capture_hook)]
+                fwd_hooks=[(intervene_point, recon_hook), (readout_point, capture_hook)]
             ):
                 model(tokens)
             baseline_probs.append(probe_prob(tokens))
     baseline_probs = np.array(baseline_probs)
 
-    for orig_idx in tqdm(candidate_indices, desc="Ablating features"):
+    loop_desc = "Ablating features" if mode == "ablation" else "Steering features"
+    for orig_idx in tqdm(candidate_indices, desc=loop_desc):
         idx = int(orig_idx)
 
-        def ablation_hook(resid_post, hook, feature_idx=idx):
-            acts = sae.encode(resid_post).clone()
-            acts[..., feature_idx] = 0.0
+        def intervention_hook(
+            resid_post,
+            hook,
+            feature_idx=idx,
+            _mode=mode,
+            _steering_coefficient=steering_coefficient,
+        ):
+            acts = _apply_feature_intervention(
+                sae.encode(resid_post), feature_idx, _mode, _steering_coefficient
+            )
             return sae.decode(acts)
 
-        ablated_probs = []
+        intervened_probs = []
         for tokens in tokens_list:
             tokens = _as_batch(tokens, model.cfg.device)
             with torch.no_grad():
                 with model.hooks(
                     fwd_hooks=[
-                        (ablate_point, ablation_hook),
+                        (intervene_point, intervention_hook),
                         (readout_point, capture_hook),
                     ]
                 ):
                     model(tokens)
-                ablated_probs.append(probe_prob(tokens))
+                intervened_probs.append(probe_prob(tokens))
 
-        ablated_probs = np.array(ablated_probs)
-        delta_probabilities[idx] = float(np.mean(np.abs(ablated_probs - baseline_probs)))
+        intervened_probs = np.array(intervened_probs)
+        delta_probabilities[idx] = float(
+            np.mean(np.abs(intervened_probs - baseline_probs))
+        )
 
     return delta_probabilities
 
 
+def get_model_ablation_effects(
+    model: HookedTransformer,
+    sae: SAE,
+    readout_probe,
+    tokens_list,
+    candidate_indices: np.ndarray,
+    layer: int = 7,
+    readout_layer: int | None = None,
+) -> dict:
+    """Ablate SAE features (zero activations). Thin wrapper around intervention API."""
+    return get_model_intervention_effects(
+        model,
+        sae,
+        readout_probe,
+        tokens_list,
+        candidate_indices,
+        layer=layer,
+        readout_layer=readout_layer,
+        mode="ablation",
+    )
+
+
+def get_model_steering_effects(
+    model: HookedTransformer,
+    sae: SAE,
+    readout_probe,
+    tokens_list,
+    candidate_indices: np.ndarray,
+    layer: int = 7,
+    readout_layer: int | None = None,
+    steering_coefficient: float = 2.0,
+) -> dict:
+    """Scale each selected feature at every token position before decoding."""
+    return get_model_intervention_effects(
+        model,
+        sae,
+        readout_probe,
+        tokens_list,
+        candidate_indices,
+        layer=layer,
+        readout_layer=readout_layer,
+        mode="steering",
+        steering_coefficient=steering_coefficient,
+    )
+
+
 if __name__ == "__main__":
+    # Flip this to switch experiments: "ablation" | "steering"
+    MODE = "ablation"
+    STEERING_COEFFICIENT = 2.0  # only used when MODE == "steering"
+
     # Attribution rankings still come from the layer-7 SAE probe / SHAP pipeline
     sae_probe = joblib.load("checkpoints/probe_layer_7.joblib")
     feature_indices = np.load("outputs/shap/shap_feature_indices.npy")
@@ -235,12 +344,18 @@ if __name__ == "__main__":
     train_ds, val_ds, _ = load_splits()
     readout_layer = model.cfg.n_layers - 1  # GPT-2 Small: 11
 
-    train_tokens = model.to_tokens(train_ds["sentence"])
+    train_tokens = model.to_tokens(list(train_ds["sentence"]))
     train_labels = np.asarray(train_ds["label"])
-    residual_probe = joblib.load("checkpoints/residual_probe_layer_11.joblib")
+    residual_probe = load_or_train_residual_probe(
+        model,
+        train_tokens,
+        train_labels,
+        layer=readout_layer,
+        checkpoint_path=f"checkpoints/residual_probe_layer_{readout_layer}.joblib",
+    )
 
-    val_tokens = model.to_tokens(val_ds["sentence"])
-    delta_probabilities = get_model_ablation_effects(
+    val_tokens = model.to_tokens(list(val_ds["sentence"]))
+    delta_probabilities = get_model_intervention_effects(
         model,
         sae,
         residual_probe,
@@ -248,9 +363,16 @@ if __name__ == "__main__":
         all_candidates,
         layer=7,
         readout_layer=readout_layer,
+        mode=MODE,
+        steering_coefficient=STEERING_COEFFICIENT,
     )
 
-    print(f"Ablated {len(delta_probabilities)} features (readout L{readout_layer})")
+    label = (
+        "Ablated"
+        if MODE == "ablation"
+        else f"Steered ({STEERING_COEFFICIENT}× activation)"
+    )
+    print(f"{label} {len(delta_probabilities)} features (readout L{readout_layer})")
     for idx, delta in sorted(delta_probabilities.items(), key=lambda x: -x[1])[:10]:
         print(f"  feature {idx}: ΔP={delta:.4f}")
 
@@ -258,11 +380,12 @@ if __name__ == "__main__":
     rho_probe, _ = faithfulness_correlation(probe_scores, feature_indices, delta_probabilities)
     rho_ig, _ = faithfulness_correlation(ig_scores, feature_indices, delta_probabilities)
     rho_ga, _ = faithfulness_correlation(ga_scores, feature_indices, delta_probabilities)
-    print("Faithfulness (Spearman ρ with downstream ablation effects):")
+    print(f"Faithfulness (Spearman ρ with downstream {MODE} effects):")
     print(f"  SHAP:          {rho_shap:.3f}")
     print(f"  Probe weights: {rho_probe:.3f}")
     print(f"  IG:            {rho_ig:.3f}")
     print(f"  GA:            {rho_ga:.3f}")
 
-    os.makedirs("outputs/ablation", exist_ok=True)
-    np.save("outputs/ablation/model_delta_probabilities.npy", delta_probabilities)
+    out_dir = f"outputs/{MODE}"
+    os.makedirs(out_dir, exist_ok=True)
+    np.save(f"{out_dir}/model_delta_probabilities.npy", delta_probabilities)
