@@ -182,7 +182,7 @@ def get_model_intervention_effects(
     candidate_indices: np.ndarray,
     layer: int = 7,
     readout_layer: int | None = None,
-    mode: str = "ablation",
+    mode: str = "steering",
     steering_coefficient: float = 2.0,
 ) -> dict:
     """

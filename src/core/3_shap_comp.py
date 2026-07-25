@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=100, n_shap=500, seed=42): # change n_shap to full split size (check first)
     """
-    activations: shape (N_sentences, 32768)
+    activations: shape (N_sentences, 32768) 
     """
     rng = np.random.default_rng(seed)
     
@@ -20,7 +20,7 @@ def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=100
     
     # Fixed background:
     bg_idx = rng.choice(len(train_activations), size=n_background, replace=False)
-    background = train_activations[bg_idx]        # shape: (n_background, 32768)
+    background = train_activations[bg_idx]     # shape: (n_background, 32768)
     
     # SHAP samples:
     shap_idx = rng.choice(len(shap_activations), size=n_shap, replace=False)
