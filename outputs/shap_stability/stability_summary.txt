@@ -1,0 +1,16 @@
+data_seed=42
+explainer_seeds=[42, 43, 44, 45, 46]
+n_background=100 n_shap=500 nsamples=256
+n_filtered_features=75
+mean_pairwise_spearman_rho=0.669431
+std_pairwise_spearman_rho=0.052552
+seed_42_vs_43 rho=0.686458 p=1.059984e-11
+seed_42_vs_44 rho=0.758065 p=3.417037e-15
+seed_42_vs_45 rho=0.687055 p=1.000743e-11
+seed_42_vs_46 rho=0.619630 p=3.083239e-09
+seed_43_vs_44 rho=0.700597 p=2.616899e-12
+seed_43_vs_45 rho=0.678208 p=2.313402e-11
+seed_43_vs_46 rho=0.705036 p=1.658690e-12
+seed_44_vs_45 rho=0.665832 p=7.123285e-11
+seed_44_vs_46 rho=0.619232 p=3.176583e-09
+seed_45_vs_46 rho=0.574196 p=7.201810e-08
