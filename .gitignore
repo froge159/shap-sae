@@ -41,3 +41,5 @@ results/
 Thumbs.db
 .idea/
 .vscode/
+
+outputs/7_shap_recompute/shap_values_raw.npy
