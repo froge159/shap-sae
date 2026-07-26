@@ -139,7 +139,7 @@ def main(checkpoint_dir: str = "checkpoints", out_dir: str = "outputs/7_shap_rec
     probe.verbose = 0
 
     shap_eval, background, bg_idx = prepare_shap_inputs()
-    feature_indices = get_shap_feature_mask(probe, shap_eval)
+    feature_indices = np.arange(shap_eval.shape[1])
     shap_values = run_linearshap(probe, shap_eval, background, feature_indices)
 
     Phi = build_attribution_matrix(shap_values, feature_indices)
