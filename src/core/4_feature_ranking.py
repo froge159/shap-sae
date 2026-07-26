@@ -148,8 +148,8 @@ if __name__ == "__main__":
     # Load data
     probe = joblib.load("checkpoints/probe_layer_7.joblib")
     train_activations = np.load("activations/probe_train/layer_7/activations.npy")
-    feature_indices = np.load("outputs/shap/shap_feature_indices.npy")
-    Phi = np.load("outputs/shap/phi_sentiment_layer7.npy")
+    feature_indices = np.load("outputs/3_shap/shap_feature_indices.npy")
+    Phi = np.load("outputs/3_shap/phi_sentiment_layer7.npy")
 
     # Feature ranking
     
@@ -159,38 +159,7 @@ if __name__ == "__main__":
     compare_rankings(probe_ranks, ig_ranks, shap_ranks, ga_ranks)
 
     # save everything, create directory if it doesn't exist
-    os.makedirs("outputs/rankings", exist_ok=True)
-    np.save("outputs/rankings/ig_scores.npy", ig_scores)
-    np.save("outputs/rankings/ga_scores.npy", ga_scores)
+    os.makedirs("outputs/4_rankings", exist_ok=True)
+    np.save("outputs/4_rankings/ig_scores.npy", ig_scores)
+    np.save("outputs/4_rankings/ga_scores.npy", ga_scores)
     
-
-    # Probe Ablation
-    """
-    probe_scores = np.abs(probe.coef_[0][feature_indices])
-    ig_scores = np.load("outputs/rankings/ig_scores.npy")
-    ga_scores = np.load("outputs/rankings/ga_scores.npy")
-    shap_scores = np.load("outputs/shap/phi_sentiment_layer7.npy")[feature_indices]
-    probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores)
-    val_activations = np.load("activations/probe_val/layer_7/activations.npy")
-
-    all_candidates, shap_top, probe_top, ig_top, ga_top = get_ablation_candidates(probe_ranks, ig_ranks, shap_ranks, ga_ranks, feature_indices, k=20) # adjust k
-    delta_probabilities = ablate(probe, val_activations, all_candidates)
-    print("delta_probabilities:")
-    for index, delta_probability in delta_probabilities.items():
-        print(f"  {index}: {delta_probability:.3f}")
-
-    rho_shap,  p = faithfulness_correlation(shap_scores,  feature_indices, delta_probabilities)
-    rho_probe, p = faithfulness_correlation(probe_scores, feature_indices, delta_probabilities)
-    rho_ig,    p = faithfulness_correlation(ig_scores,    feature_indices, delta_probabilities)
-    rho_ga,    p = faithfulness_correlation(ga_scores,    feature_indices, delta_probabilities)
-
-    print(f"Faithfulness (Spearman ρ with ablation effects):")
-    print(f"  SHAP:         {rho_shap:.3f}")
-    print(f"  Probe weights:{rho_probe:.3f}")
-    print(f"  IG:           {rho_ig:.3f}")
-    print(f"  GA:           {rho_ga:.3f}")
-
-    # save delta_probabilities
-    os.makedirs("outputs/ablation", exist_ok=True)
-    np.save("outputs/ablation/delta_probabilities.npy", delta_probabilities)
-    """

@@ -77,7 +77,7 @@ def main(
     n_background: int = 100,
     n_shap: int = 500,
     n_shap_samples: int = 256,
-    out_dir: str = "outputs/shap_stability",
+    out_dir: str = "outputs/6_shap_stability",
 ):
     if explainer_seeds is None:
         explainer_seeds = [42, 43, 44, 45, 46]
