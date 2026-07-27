@@ -1,6 +1,7 @@
 Probe vs IG:   ρ=0.423,   p=0.0000
-Probe vs SHAP: ρ=0.387, p=0.0000
-IG vs SHAP:    ρ=0.524,    p=0.0000
-Probe vs GA:   ρ=0.429,   p=0.0000
-IG vs GA:      ρ=0.998,      p=0.0000
+IG vs SHAP:    ρ=0.387, p=0.0000
+Probe vs SHAP: ρ=0.524,    p=0.0000
+IG vs GA:      ρ=0.429,   p=0.0000
+Probe vs GA:   ρ=0.998,      p=0.0000
 SHAP vs GA:    ρ=0.526,    p=0.0000
+

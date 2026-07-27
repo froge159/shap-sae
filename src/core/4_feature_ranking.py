@@ -155,7 +155,7 @@ if __name__ == "__main__":
     
     ig_scores, ga_scores, probe_scores, shap_scores = feature_ranking(probe, train_activations, feature_indices, Phi)
 
-    probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(probe_scores, ig_scores, ga_scores, shap_scores)
+    probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores)
     compare_rankings(probe_ranks, ig_ranks, shap_ranks, ga_ranks)
 
     # save everything, create directory if it doesn't exist

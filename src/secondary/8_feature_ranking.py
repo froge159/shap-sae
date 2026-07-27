@@ -113,7 +113,7 @@ if __name__ == "__main__":
     np.save("outputs/8_rankings_recompute/ig_scores.npy", ig_scores) # shape (32k,)
     np.save("outputs/8_rankings_recompute/ga_scores.npy", ga_scores) # shape (32k,)
 
-    probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(probe_scores, ig_scores, ga_scores, shap_scores)
+    probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores)
     compare_rankings(probe_ranks, ig_ranks, shap_ranks, ga_ranks)
 
     

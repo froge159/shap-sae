@@ -1,0 +1,22 @@
+Steered (a_i += +0.672) 59 features                                                                                                                                                                                                                                           
+Top features by |Δ| (logit wonderful − awful):
+  feature 18357: |Δ|=0.8417  signedΔ=-0.8415
+  feature 7083: |Δ|=0.8050  signedΔ=+0.8050
+  feature 658: |Δ|=0.7029  signedΔ=-0.7029
+  feature 23808: |Δ|=0.5798  signedΔ=+0.5798
+  feature 1108: |Δ|=0.5404  signedΔ=+0.5404
+  feature 12257: |Δ|=0.5325  signedΔ=-0.5325
+  feature 13860: |Δ|=0.4497  signedΔ=+0.4497
+  feature 31846: |Δ|=0.4318  signedΔ=+0.4318
+  feature 15377: |Δ|=0.4096  signedΔ=-0.4067
+  feature 14117: |Δ|=0.4046  signedΔ=+0.4046
+Importance faithfulness  (Spearman ρ of |attribution| vs |Δ|):
+  SHAP            ρ=0.238  p=0.0699
+  Probe weights   ρ=0.164  p=0.2137
+  IG              ρ=0.259  p=0.0476
+  GA              ρ=-0.034  p=0.7971
+Directional faithfulness (Spearman ρ of attribution vs signed Δ):
+  SHAP            ρ=-0.068  p=0.6088
+  Probe weights   ρ=0.561  p=0.0000
+  IG              ρ=-0.372  p=0.0037
+  GA              ρ=0.650  p=0.0000

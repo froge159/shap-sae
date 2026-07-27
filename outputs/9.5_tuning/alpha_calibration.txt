@@ -1,0 +1,14 @@
+Steering α calibration
+median_positive_activation_scale = 1.344534
+median_decoder_norm = 0.999640
+pilot_features = [18357, 19167, 30907]
+n_pilot_examples = 200
+criteria: mean|ΔP| >= 0.02, sat_frac <= 0.25
+
+     alpha  mean_abs_dp mean_signed_dp   sat_frac
+  0.672267     0.082756      -0.082386   0.155000
+  1.344534     0.152884      -0.152017   0.228333
+  2.689067     0.220189      -0.217826   0.391667
+  5.378135     0.266009      -0.259196   0.448333
+
+recommended_alpha = 0.672267
