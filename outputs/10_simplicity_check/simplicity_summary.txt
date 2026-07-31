@@ -1,0 +1,48 @@
+SST simplicity check
+============================================================
+
+1) Active filtered features per example
+   n_filtered_features = 75
+   mean=9.85  median=9.0  std=4.93  p10=5.0  p90=18.0
+   frac(≥2 active)=0.998  frac(≥5 active)=0.912
+
+2) Co-activation among top-20 |Φ| features
+   mean active=2.61  median=1.0  frac(exactly 1)=0.347  frac(≥2)=0.446
+   mean pairwise Jaccard=0.175
+
+3) Lexical tracking (top-20 |Φ| features)
+     feat          Φ    r_any    r_pos    r_neg    ρ_lex  lex|on  lex|off
+    18357   -0.16623   +0.086   -0.052   +0.215   -0.158   0.419    0.263
+    19167   +0.10336   +0.090   +0.085   +0.052   +0.037   0.348    0.253
+    30907   -0.10090   +0.094   +0.084   +0.061   +0.035   0.351    0.253
+    16048   -0.09433   +0.049   +0.037   +0.041   +0.025   0.348    0.254
+    12257   -0.08603   +0.100   -0.018   +0.185   -0.093   0.485    0.263
+     7973   +0.07456   -0.020   -0.005   -0.024   -0.007   0.235    0.274
+     6319   +0.05870   +0.077   +0.071   +0.047   +0.031   0.336    0.254
+    21459   +0.05325   +0.186   +0.187   +0.068   +0.104   0.392    0.230
+     4684   -0.04718   -0.048   -0.028   -0.051   +0.008   0.233    0.281
+     5066   +0.04235   +0.207   +0.229   +0.016   +0.165   0.654    0.251
+     9857   +0.02322   +0.012   +0.015   +0.007   +0.009   0.303    0.270
+    31932   +0.02131   -0.010   -0.034   +0.037   -0.049   0.252    0.275
+    20622   -0.01907   +0.082   +0.064   +0.073   +0.017   0.377    0.260
+     6024   -0.01796   +0.080   +0.032   +0.103   -0.023   0.410    0.261
+    31723   -0.01617   +0.079   +0.069   +0.055   +0.029   0.348    0.254
+    14597   +0.01571   +0.025   +0.002   +0.026   -0.009   0.316    0.268
+    27635   -0.01415   +0.058   +0.049   +0.039   +0.026   0.335    0.260
+     8933   +0.01398   -0.103   -0.086   -0.050   -0.046   0.149    0.285
+    30961   +0.01337   +0.098   +0.085   +0.046   +0.046   0.473    0.262
+     3351   +0.01322   +0.140   +0.135   +0.056   +0.081   0.384    0.231
+   mean |r(activation, has_lexicon_word)| = 0.082
+
+4) Lexicon baseline vs SAE probe (SHAP held-out split)
+   frac examples with ≥1 lexicon word = 0.271
+   lexicon BoW  acc=0.629  AUROC=0.676
+   lexicon vote acc=0.625  (when signal: 0.861)
+   SAE probe    acc=0.827  AUROC=0.901
+   agreement(lex BoW, SAE) = 0.619
+
+5) Reading
+   Top-ranked features often co-activate → interaction structure is at least possible.
+   Top features are only weakly tied to the sentiment lexicon → not a pure lexical shortcut (on this lexicon).
+   SAE probe beats lexicon BoW by +0.199 accuracy → some non-lexical signal remains (necessary but not sufficient for SHAP to help).
+
