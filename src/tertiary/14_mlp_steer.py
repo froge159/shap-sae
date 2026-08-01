@@ -9,7 +9,6 @@ Mirrors secondary/9_steer.py (logit-diff readout, SAE encode→edit→decode), b
 """
 
 from __future__ import annotations
-
 import os
 import sys
 from pathlib import Path

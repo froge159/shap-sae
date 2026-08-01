@@ -28,16 +28,25 @@ def compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores):
     return probe_ranks, ig_ranks, ga_ranks, shap_ranks
 
 
-def get_ablation_candidates(probe_ranks, ig_ranks, shap_ranks, ga_ranks, k=20):
-    # Top-k by each method (ranks are over all features; rank 1 = most important)
-    shap_top = np.argsort(shap_ranks)[:k]
-    probe_top = np.argsort(probe_ranks)[:k]
-    ig_top = np.argsort(ig_ranks)[:k]
-    ga_top = np.argsort(ga_ranks)[:k]
+def get_shap_candidates(
+    shap_scores: np.ndarray,
+    feature_indices: np.ndarray,
+    k: int = 20,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Fixed candidate set: top-k filtered features by |SHAP|.
 
-    # Union — ablate each unique feature once, reuse results for all methods
-    all_candidates = np.unique(np.concatenate([shap_top, probe_top, ig_top, ga_top]))
-    return all_candidates, shap_top, probe_top, ig_top, ga_top
+    `shap_scores` and ranking are over the filtered set only (aligned with
+    `feature_indices`). Intervention uses the mapped global SAE ids.
+
+    Returns
+    -------
+    local_top : (k,) indices into the filtered score vectors
+    global_top : (k,) global SAE feature indices for intervention
+    """
+    local_top = np.argsort(np.abs(shap_scores))[::-1][:k]
+    global_top = feature_indices[local_top]
+    return local_top, global_top
 
 
 def faithfulness_correlation(method_scores, effects, *, importance: bool):
@@ -388,22 +397,28 @@ if __name__ == "__main__":
     MODE = "steering"
     # Signed additive steering strength: a_i ← a_i + α  (use −α to push the other way)
     STEERING_ALPHA = 0.6723
+    K = 20
 
-    # Attribution rankings still come from the layer-7 SAE probe / SHAP pipeline.
-    # Score vectors are signed and shape (n_features,); candidates selected by |score|.
+    # Full-width signed attributions; candidates restricted to the SHAP-filtered
+    # feature set (outputs/3_shap), top-k by |SHAP| only (no union across methods).
+    feature_indices = np.load("outputs/3_shap/shap_feature_indices.npy")
     sae_probe = joblib.load("checkpoints/probe_layer_7.joblib")
 
     probe_scores = sae_probe.coef_[0]
     ig_scores = np.load("outputs/8_rankings_recompute/ig_scores.npy")
     ga_scores = np.load("outputs/8_rankings_recompute/ga_scores.npy")
     shap_scores = np.load("outputs/7_shap_recompute/phi_sentiment_layer7_signed.npy")
-    probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(
-        ig_scores, probe_scores, ga_scores, shap_scores
-    )
 
-    all_candidates, shap_top, probe_top, ig_top, ga_top = get_ablation_candidates(
-        probe_ranks, ig_ranks, shap_ranks, ga_ranks, k=20
+    shap_filtered = shap_scores[feature_indices]
+    local_top, global_candidates = get_shap_candidates(
+        shap_filtered, feature_indices, k=K
     )
+    print(
+        f"Fixed candidate set: top-{K} by |SHAP| among "
+        f"{len(feature_indices)} filtered features"
+    )
+    print(f"  local indices:  {local_top.tolist()}")
+    print(f"  global indices: {global_candidates.tolist()}")
 
     model = load_model()
     sae = SAE.from_pretrained("gpt2-small-resid-post-v5-32k", "blocks.7.hook_resid_post")
@@ -422,7 +437,7 @@ if __name__ == "__main__":
         model,
         sae,
         val_tokens,
-        all_candidates,
+        global_candidates,
         layer=7,
         mode=MODE,
         steering_alpha=STEERING_ALPHA,
@@ -448,7 +463,10 @@ if __name__ == "__main__":
     }
     report_faithfulness(method_scores, delta_abs, delta_signed)
 
-    out_dir = f"outputs/{MODE}"
-    os.makedirs(out_dir, exist_ok=True)
-    np.save(f"{out_dir}/model_delta_abs.npy", delta_abs)
-    np.save(f"{out_dir}/model_delta_signed.npy", delta_signed)
+    out_dir = Path("outputs/9_steer")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    np.save(out_dir / f"model_delta_abs_{MODE}.npy", delta_abs)
+    np.save(out_dir / f"model_delta_signed_{MODE}.npy", delta_signed)
+    np.save(out_dir / "shap_top_local.npy", local_top)
+    np.save(out_dir / "shap_top_global.npy", global_candidates)
+    print(f"\nWrote outputs → {out_dir}/")
