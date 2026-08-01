@@ -1,0 +1,10 @@
+Importance faithfulness  (Spearman ρ of |attribution| vs |Δ|):
+  SHAP            ρ=0.254  p=0.2796
+  Probe weights   ρ=0.564  p=0.0096
+  IG              ρ=0.077  p=0.7479
+  GA              ρ=0.032  p=0.8949
+Directional faithfulness (Spearman ρ of attribution vs signed Δ):
+  SHAP            ρ=0.493  p=0.0271
+  Probe weights   ρ=0.802  p=0.0000
+  IG              ρ=0.053  p=0.8256
+  GA              ρ=0.627  p=0.0031
