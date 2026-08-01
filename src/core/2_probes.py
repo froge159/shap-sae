@@ -66,7 +66,7 @@ def main():
         # save probe as joblib file
         out_dir = Path("checkpoints")
         joblib.dump(probe, out_dir / f"probe_layer_{LAYER}.joblib")
-        """
+        
 
         out_dir = Path("outputs") / f"layer_{LAYER}"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -86,7 +86,7 @@ def main():
                 f"    {rank:2d}. feature {feat['feature_idx']:5d}  "
                 f"weight {feat['weight']:+.6f}"
             )
-        """
+        
         
 
 if __name__ == "__main__":
