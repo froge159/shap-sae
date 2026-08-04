@@ -1,0 +1,10 @@
+{
+  "pos_token": " wonderful",
+  "neg_token": " awful",
+  "layer": 7,
+  "ks": [5, 10, 20, 30, 50, 65],
+  "alphas": [0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0],
+  "sae_release": "gpt2-small-resid-post-v5-32k",
+  "sae_id": "blocks.7.hook_resid_post",
+  "activations_path": "activations/probe_train/layer_7/activations.npy"
+}
