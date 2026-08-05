@@ -4,7 +4,7 @@ Steering / ablation faithfulness for MLP-probe attributions.
 Mirrors secondary/9_steer.py (logit-diff readout, SAE encode→edit→decode), but:
   - Loads filtered (n_filtered,) scores from outputs/13_mlp_ranking/
   - Maps local → global SAE indices via feature_indices.npy
-  - Fixes a single candidate set: top-k by |SHAP| only (no union across methods)
+  - Fixes a single candidate set: top-k by |SHAP| or k random filtered features
   - Evaluates SHAP / probe / IG / GA faithfulness on that shared set
 """
 
@@ -61,18 +61,33 @@ def get_shap_candidates(
     shap_scores: np.ndarray,
     feature_indices: np.ndarray,
     k: int = 20,
+    selection: str = "top",
+    seed: int = 0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Fixed candidate set: top-k filtered features by |SHAP|.
+    Fixed candidate set from the filtered feature pool.
+
+    selection="top":    top-k by |SHAP|
+    selection="random": k features drawn uniformly (without replacement)
+
+    `shap_scores` is unused when selection="random".
 
     Returns
     -------
-    local_top : (k,) indices into the filtered score vectors
-    global_top : (k,) global SAE feature indices for intervention
+    local_idx : (k,) indices into the filtered score vectors
+    global_idx : (k,) global SAE feature indices for intervention
     """
-    local_top = np.argsort(np.abs(shap_scores))[::-1][:k]
-    global_top = feature_indices[local_top]
-    return local_top, global_top
+    n = len(feature_indices)
+    k = min(k, n)
+    if selection == "top":
+        local_idx = np.argsort(np.abs(shap_scores))[::-1][:k]
+    elif selection == "random":
+        rng = np.random.default_rng(seed)
+        local_idx = rng.choice(n, size=k, replace=False)
+    else:
+        raise ValueError(f"Unknown selection={selection!r}; expected 'top' or 'random'")
+    global_idx = feature_indices[local_idx]
+    return local_idx, global_idx
 
 
 def faithfulness_correlation(method_scores, effects, *, importance: bool):
@@ -266,6 +281,9 @@ if __name__ == "__main__":
     MODE = "steering"
     STEERING_ALPHA = 0.6723
     K = 20
+    # Candidate selection: "top" (|SHAP|) | "random" (uniform over filtered set)
+    SELECTION = "random"
+    SEED = 0
 
     feature_indices = np.load(RANKINGS_DIR / "feature_indices.npy")
     ig_scores = np.load(RANKINGS_DIR / "ig_scores.npy")
@@ -286,10 +304,14 @@ if __name__ == "__main__":
             )
 
     local_top, global_candidates = get_shap_candidates(
-        shap_scores, feature_indices, k=K
+        shap_scores, feature_indices, k=K, selection=SELECTION, seed=SEED
     )
+    if SELECTION == "top":
+        sel_desc = f"top-{K} by |SHAP|"
+    else:
+        sel_desc = f"{K} random (seed={SEED})"
     print(
-        f"Fixed candidate set: top-{K} by |SHAP| "
+        f"Fixed candidate set: {sel_desc} "
         f"({len(global_candidates)} global SAE features)"
     )
     print(f"  local indices:  {local_top.tolist()}")

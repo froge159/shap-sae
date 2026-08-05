@@ -32,21 +32,35 @@ def get_shap_candidates(
     shap_scores: np.ndarray,
     feature_indices: np.ndarray,
     k: int = 20,
+    selection: str = "top",
+    seed: int = 0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Fixed candidate set: top-k filtered features by |SHAP|.
+    Fixed candidate set from the filtered feature pool.
+
+    selection="top":    top-k by |SHAP|
+    selection="random": k features drawn uniformly (without replacement)
 
     `shap_scores` and ranking are over the filtered set only (aligned with
     `feature_indices`). Intervention uses the mapped global SAE ids.
+    `shap_scores` is unused when selection="random".
 
     Returns
     -------
-    local_top : (k,) indices into the filtered score vectors
-    global_top : (k,) global SAE feature indices for intervention
+    local_idx : (k,) indices into the filtered score vectors
+    global_idx : (k,) global SAE feature indices for intervention
     """
-    local_top = np.argsort(np.abs(shap_scores))[::-1][:k]
-    global_top = feature_indices[local_top]
-    return local_top, global_top
+    n = len(feature_indices)
+    k = min(k, n)
+    if selection == "top":
+        local_idx = np.argsort(np.abs(shap_scores))[::-1][:k]
+    elif selection == "random":
+        rng = np.random.default_rng(seed)
+        local_idx = rng.choice(n, size=k, replace=False)
+    else:
+        raise ValueError(f"Unknown selection={selection!r}; expected 'top' or 'random'")
+    global_idx = feature_indices[local_idx]
+    return local_idx, global_idx
 
 
 def faithfulness_correlation(method_scores, effects, *, importance: bool):
@@ -398,9 +412,12 @@ if __name__ == "__main__":
     # Signed additive steering strength: a_i ← a_i + α  (use −α to push the other way)
     STEERING_ALPHA = 0.6723
     K = 20
+    # Candidate selection: "top" (|SHAP|) | "random" (uniform over filtered set)
+    SELECTION = "random"
+    SEED = 0
 
     # Full-width signed attributions; candidates restricted to the SHAP-filtered
-    # feature set (outputs/3_shap), top-k by |SHAP| only (no union across methods).
+    # feature set (outputs/3_shap); no union across methods.
     feature_indices = np.load("outputs/3_shap/shap_feature_indices.npy")
     sae_probe = joblib.load("checkpoints/probe_layer_7.joblib")
 
@@ -411,10 +428,14 @@ if __name__ == "__main__":
 
     shap_filtered = shap_scores[feature_indices]
     local_top, global_candidates = get_shap_candidates(
-        shap_filtered, feature_indices, k=K
+        shap_filtered, feature_indices, k=K, selection=SELECTION, seed=SEED
     )
+    if SELECTION == "top":
+        sel_desc = f"top-{K} by |SHAP|"
+    else:
+        sel_desc = f"{K} random (seed={SEED})"
     print(
-        f"Fixed candidate set: top-{K} by |SHAP| among "
+        f"Fixed candidate set: {sel_desc} among "
         f"{len(feature_indices)} filtered features"
     )
     print(f"  local indices:  {local_top.tolist()}")
@@ -463,7 +484,7 @@ if __name__ == "__main__":
     }
     report_faithfulness(method_scores, delta_abs, delta_signed)
 
-    out_dir = Path("outputs/9_steer")
+    out_dir = Path("outputs/9_steer_check")
     out_dir.mkdir(parents=True, exist_ok=True)
     np.save(out_dir / f"model_delta_abs_{MODE}.npy", delta_abs)
     np.save(out_dir / f"model_delta_signed_{MODE}.npy", delta_signed)

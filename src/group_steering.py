@@ -8,6 +8,10 @@ Part 1 — Build unit-norm steering vectors for each (probe_type, method, k):
 Part 2 — Sweep alpha; add α·v at blocks.7.hook_resid_post (no SAE encode/decode).
   effect = mean Δ logit-diff (wonderful − awful)
   cost   = mean Δ perplexity (steered − clean baseline)
+
+Scoring batches over examples *and* over (vector, alpha) conditions: each token
+mini-batch is repeated across C conditions in one forward, with a hook that
+adds a different α·v to each condition block.
 """
 
 from __future__ import annotations
@@ -230,15 +234,105 @@ def score_batches(
     return np.concatenate(diffs), np.concatenate(ppls)
 
 
-def make_add_vector_hook(layer: int, vector: np.ndarray, alpha: float, device):
-    """resid_post ← resid_post + α · v at every token position."""
-    v = torch.as_tensor(vector, device=device)
+def make_multi_condition_hook(
+    layer: int,
+    scaled_vectors: torch.Tensor,
+    examples_per_cond: int,
+):
+    """
+    For an expanded batch of shape (C * B, T, d), add scaled_vectors[c] to
+    rows [c*B : (c+1)*B] at every token position.
+
+    scaled_vectors: (C, d_model) — already α · v for each condition.
+    """
     point = f"blocks.{layer}.hook_resid_post"
 
-    def hook(resid_post, hook, _v=v, _alpha=alpha):
-        return resid_post + _alpha * _v.to(dtype=resid_post.dtype)
+    def hook(resid_post, hook, _scaled=scaled_vectors, _b=examples_per_cond):
+        c = resid_post.shape[0] // _b
+        add = _scaled[:c].to(dtype=resid_post.dtype).repeat_interleave(_b, dim=0)
+        return resid_post + add[:, None, :]
 
     return point, hook
+
+
+def score_conditions(
+    model: HookedTransformer,
+    all_tokens: torch.Tensor,
+    conditions: list[tuple[tuple[str, str, int], float, np.ndarray]],
+    base_diffs: np.ndarray,
+    base_ppls: np.ndarray,
+    pos_id: int,
+    neg_id: int,
+    pad_id: int,
+    layer: int,
+    batch_size: int,
+    condition_batch_size: int,
+) -> list[dict]:
+    """
+    Evaluate many (meta, alpha, vector) conditions with batched forwards.
+
+    Each token mini-batch of size B is repeated across up to
+    `condition_batch_size` conditions → one forward of size ≤ C·B, with a
+    hook that adds a different α·v to each condition block.
+    """
+    n = all_tokens.shape[0]
+    device = model.cfg.device
+    results: list[dict] = []
+
+    for cond_start in tqdm(
+        range(0, len(conditions), condition_batch_size), desc="Condition batches"
+    ):
+        chunk = conditions[cond_start : cond_start + condition_batch_size]
+        c = len(chunk)
+        scaled = np.stack(
+            [float(alpha) * np.asarray(vector, dtype=np.float32) for _, alpha, vector in chunk],
+            axis=0,
+        )
+        scaled_t = torch.as_tensor(scaled, device=device)
+
+        # Accumulators for mean effect / cost over all examples.
+        sum_delta_diff = np.zeros(c, dtype=np.float64)
+        sum_delta_ppl = np.zeros(c, dtype=np.float64)
+
+        for start in range(0, n, batch_size):
+            batch = all_tokens[start : start + batch_size].to(device)
+            b = batch.shape[0]
+            expanded = batch.repeat(c, 1)  # (C*B, T); first B rows = cond 0
+            point, hook = make_multi_condition_hook(layer, scaled_t, b)
+
+            with torch.no_grad():
+                with model.hooks(fwd_hooks=[(point, hook)]):
+                    logits = model(expanded)
+                diffs = last_non_pad_logit_diff(
+                    logits, expanded, pad_id, pos_id, neg_id
+                ).float().cpu().numpy()
+                ppls = (
+                    per_example_perplexity(logits, expanded, pad_id)
+                    .float()
+                    .cpu()
+                    .numpy()
+                )
+
+            diffs = diffs.reshape(c, b)
+            ppls = ppls.reshape(c, b)
+            base_d = base_diffs[start : start + b]
+            base_p = base_ppls[start : start + b]
+            sum_delta_diff += (diffs - base_d[None, :]).sum(axis=1)
+            sum_delta_ppl += (ppls - base_p[None, :]).sum(axis=1)
+
+        for i, ((probe_type, method, k), alpha, _) in enumerate(chunk):
+            results.append(
+                {
+                    "probe_type": probe_type,
+                    "method": method,
+                    "k": int(k),
+                    "alpha": float(alpha),
+                    "effect": float(sum_delta_diff[i] / n),
+                    "cost": float(sum_delta_ppl[i] / n),
+                }
+            )
+
+    return results
 
 
 def print_summary_table(results: list[dict], k: int = K_SUMMARY) -> None:
@@ -272,6 +366,9 @@ def main() -> None:
     pos_token = cfg["pos_token"]
     neg_token = cfg["neg_token"]
     batch_size = int(cfg.get("batch_size", 32))
+    # How many (vector, alpha) conditions to pack into one forward.
+    # Peak batch size ≈ batch_size * condition_batch_size.
+    condition_batch_size = int(cfg.get("condition_batch_size", 8))
 
     print("Loading attribution scores…")
     score_sets = {
@@ -294,7 +391,8 @@ def main() -> None:
     pos_id, neg_id = sentiment_token_ids(model, pos_token, neg_token)
     print(
         f"Readout: {pos_token!r}({pos_id}) − {neg_token!r}({neg_id}); "
-        f"n_val={val_tokens.shape[0]}, layer={layer}"
+        f"n_val={val_tokens.shape[0]}, layer={layer}; "
+        f"batch_size={batch_size}, condition_batch_size={condition_batch_size}"
     )
 
     print("Building steering vectors…")
@@ -324,35 +422,28 @@ def main() -> None:
         f"mean PPL={base_ppls.mean():.2f}"
     )
 
-    results: list[dict] = []
-    items = list(all_vectors.items())
-    for (probe_type, method, k), vector in tqdm(items, desc="Vectors"):
-        for alpha in alphas:
-            point, hook = make_add_vector_hook(
-                layer, vector, alpha, model.cfg.device
-            )
-            steered_diffs, steered_ppls = score_batches(
-                model,
-                val_tokens,
-                pos_id,
-                neg_id,
-                pad_id,
-                batch_size,
-                fwd_hooks=[(point, hook)],
-                desc=f"{probe_type}/{method}/k={k}/α={alpha:g}",
-            )
-            effect = float(np.mean(steered_diffs - base_diffs))
-            cost = float(np.mean(steered_ppls - base_ppls))
-            results.append(
-                {
-                    "probe_type": probe_type,
-                    "method": method,
-                    "k": int(k),
-                    "alpha": float(alpha),
-                    "effect": effect,
-                    "cost": cost,
-                }
-            )
+    conditions: list[tuple[tuple[str, str, int], float, np.ndarray]] = [
+        ((probe_type, method, k), alpha, vector)
+        for (probe_type, method, k), vector in all_vectors.items()
+        for alpha in alphas
+    ]
+    print(
+        f"Scoring {len(conditions)} conditions "
+        f"({len(all_vectors)} vectors × {len(alphas)} alphas)…"
+    )
+    results = score_conditions(
+        model,
+        val_tokens,
+        conditions,
+        base_diffs,
+        base_ppls,
+        pos_id,
+        neg_id,
+        pad_id,
+        layer,
+        batch_size,
+        condition_batch_size,
+    )
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT_PATH, "w") as f:

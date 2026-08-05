@@ -1,0 +1,21 @@
+Top features by |Δ| (logit wonderful − awful):
+  feature 18357: |Δ|=0.8417  signedΔ=-0.8415
+  feature 9453: |Δ|=0.2829  signedΔ=-0.2829
+  feature 2562: |Δ|=0.2160  signedΔ=-0.2160
+  feature 6024: |Δ|=0.2070  signedΔ=-0.2069
+  feature 20622: |Δ|=0.1438  signedΔ=-0.1437
+  feature 7973: |Δ|=0.1363  signedΔ=-0.1319
+  feature 32109: |Δ|=0.1308  signedΔ=-0.1306
+  feature 2443: |Δ|=0.1229  signedΔ=-0.1228
+  feature 31878: |Δ|=0.0790  signedΔ=+0.0782
+  feature 25515: |Δ|=0.0760  signedΔ=+0.0651
+Importance faithfulness  (Spearman ρ of |attribution| vs |Δ|):
+  SHAP            ρ=0.281  p=0.2297
+  Probe weights   ρ=0.398  p=0.0818
+  IG              ρ=0.502  p=0.0240
+  GA              ρ=0.465  p=0.0390
+Directional faithfulness (Spearman ρ of attribution vs signed Δ):
+  SHAP            ρ=0.217  p=0.3591
+  Probe weights   ρ=0.188  p=0.4274
+  IG              ρ=-0.262  p=0.2651
+  GA              ρ=0.119  p=0.6179
