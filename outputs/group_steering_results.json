@@ -1,0 +1,3362 @@
+[
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": 0.047179768425807976,
+    "cost": 4.248089530071016
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": 0.09367510210851754,
+    "cost": 8.59515911771434
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": 0.18443664903098866,
+    "cost": 17.589065723196395
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": 0.4366545017297564,
+    "cost": 46.79991403718298
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": 0.7858055872247848,
+    "cost": 102.1543847595529
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": 1.2743542776370234,
+    "cost": 239.13011082581448
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": 2.2726767107038963,
+    "cost": 1073.6080438753233
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": 0.03528828112070359,
+    "cost": 1.3646951549668238
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": 0.06993986464707928,
+    "cost": 2.819621396900238
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": 0.13718979166559928,
+    "cost": 6.018339289081991
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": 0.3206105355908672,
+    "cost": 17.681078590418746
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": 0.5598213903456956,
+    "cost": 43.48260926794378
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": 0.8193781778520226,
+    "cost": 119.2178257138062
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": 0.9291851658840931,
+    "cost": 714.1456034918441
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": 0.01821306534885912,
+    "cost": 3.8328810616121083
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": 0.03572135480458938,
+    "cost": 7.745694573009116
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": 0.06852206124619337,
+    "cost": 15.794304533350282
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": 0.1477754865158102,
+    "cost": 41.67864136213455
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": 0.21182051169426222,
+    "cost": 90.40268153234227
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": 0.11162271473200527,
+    "cost": 210.01017341772368
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": -0.8918359405662584,
+    "cost": 984.0122658550752
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": 0.016545581666579743,
+    "cost": 1.524123071184538
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": 0.03254338071691332,
+    "cost": 3.0996643867711695
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": 0.06280953575894045,
+    "cost": 6.3550393907557945
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": 0.13859410872201688,
+    "cost": 16.923950064656665
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": 0.21059490973065334,
+    "cost": 36.29097699090009
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": 0.16288179342073159,
+    "cost": 78.86122614547678
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": -0.702559162333233,
+    "cost": 434.74944714002623
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": 0.021900822256749466,
+    "cost": 4.069037288657464
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": 0.043432169540214956,
+    "cost": 8.198088904792213
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": 0.08531689856270001,
+    "cost": 16.573841762976986
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": 0.20028975523950746,
+    "cost": 42.70479682827204
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": 0.35082491231044904,
+    "cost": 88.7093336082312
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": 0.49391199531849717,
+    "cost": 187.74132480896998
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": 0.2029684402286074,
+    "cost": 832.8681988154418
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": 0.01471082226306324,
+    "cost": 3.9762474162770696
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": 0.029074432212181596,
+    "cost": 7.9897592467521585
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": 0.05670633874914713,
+    "cost": 16.108637170068487
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": 0.1298899375856619,
+    "cost": 41.24829406489054
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": 0.2148581047715161,
+    "cost": 85.70402389553556
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": 0.2357872841358657,
+    "cost": 188.8244412908741
+  },
+  {
+    "probe_type": "logistic",
+    "method": "shap",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": -0.4755074609225161,
+    "cost": 974.5906241565524
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": 0.019778800893363282,
+    "cost": 6.535026588432389
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": 0.039729184052703925,
+    "cost": 13.211857808176728
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": 0.08012986801516016,
+    "cost": 27.00664320824713
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": 0.20511698831404537,
+    "cost": 71.99092507159396
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": 0.42425078152430173,
+    "cost": 160.11747179652554
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": 0.8866054124818936,
+    "cost": 399.37547833025985
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": 2.149026654352412,
+    "cost": 2201.797890810607
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": 0.012479886232661955,
+    "cost": 6.066902398921504
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": 0.025053688144476147,
+    "cost": 12.294874990323915
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": 0.05047516321527016,
+    "cost": 25.2814131577967
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": 0.12885984924141192,
+    "cost": 68.60012533527345
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": 0.2660738556627188,
+    "cost": 157.47006038627254
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": 0.5608894496926032,
+    "cost": 425.20647568326024
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": 1.5307629384562134,
+    "cost": 3156.847354953111
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": 0.03721173695587116,
+    "cost": 5.68725794118316
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": 0.07448006355981972,
+    "cost": 11.524570756986622
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": 0.1491225803755128,
+    "cost": 23.63763104587752
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": 0.37292018840157665,
+    "cost": 63.73573800016927
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": 0.7393794311813449,
+    "cost": 144.53109578835188
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": 1.4149442641387195,
+    "cost": 372.4200229829808
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": 2.9438547720840202,
+    "cost": 2144.466994058069
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": 0.04056019944451724,
+    "cost": 5.65348470189788
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": 0.08124085507329633,
+    "cost": 11.42851369778866
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": 0.16290451422513677,
+    "cost": 23.344390531172493
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": 0.4094768927088352,
+    "cost": 62.16762033922085
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": 0.8203123261069005,
+    "cost": 137.88697304779458
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": 1.610500662332949,
+    "cost": 338.7794988281395
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": 3.590587569142162,
+    "cost": 1642.389662503016
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": 0.04547109275354156,
+    "cost": -1.593594886977657
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": 0.09121348196576076,
+    "cost": -3.0171766739933825
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": 0.18344512398326498,
+    "cost": -5.406118698437316
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": 0.4647732910083747,
+    "cost": -8.886413835908039
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": 0.9408572734499705,
+    "cost": -2.888290011795458
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": 1.8730845397544411,
+    "cost": 50.715001663815215
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": 4.268352362784365,
+    "cost": 592.6478226774401
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": 0.046638061022716004,
+    "cost": -3.5872592606938163
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": 0.09353123068030672,
+    "cost": -6.99465846430073
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": 0.18800031612519344,
+    "cost": -13.312232072460512
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": 0.47548812886224695,
+    "cost": -28.28810077486735
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": 0.9597429739227628,
+    "cost": -40.86687568644915
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": 1.900816313041788,
+    "cost": -24.739006276603643
+  },
+  {
+    "probe_type": "logistic",
+    "method": "probe",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": 4.316880031473163,
+    "cost": 346.1743583550809
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": -0.0381277550142417,
+    "cost": 1.5915537024932058
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": -0.07605593984751531,
+    "cost": 3.2557112664143606
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": -0.15131001707540365,
+    "cost": 6.829110724268467
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": -0.37217718434791663,
+    "cost": 19.571635226829528
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": -0.7236003201684251,
+    "cost": 48.23209203774092
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": -1.362010376166882,
+    "cost": 138.46451882026474
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": -2.7020778312373457,
+    "cost": 804.9710235505074
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": -0.048336900217512815,
+    "cost": 0.9501308771766688
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": -0.09643683455245751,
+    "cost": 2.041104897582349
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": -0.1918826334501488,
+    "cost": 4.639107599751214
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": -0.4715489147913572,
+    "cost": 15.772324250349076
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": -0.9115946195168534,
+    "cost": 45.41273038747452
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": -1.6736433361101046,
+    "cost": 142.95832468235616
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": -3.0310061335256844,
+    "cost": 712.2887504485498
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": -0.06474458390097881,
+    "cost": -0.2375333931771299
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": -0.12917805737586238,
+    "cost": -0.23923256694149486
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": -0.2569629553638338,
+    "cost": 0.4267000881097643
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": -0.6288118485152615,
+    "cost": 7.801740849143183
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": -1.1932617992581624,
+    "cost": 36.63345616804541
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": -2.0418131761658525,
+    "cost": 139.40432267688425
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": -3.3192395082064796,
+    "cost": 565.3420776475941
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": -0.061759332174642134,
+    "cost": 0.7736401942148702
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": -0.12325390559143416,
+    "cost": 1.7960574660436206
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": -0.24529541943054864,
+    "cost": 4.55507975298682
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": -0.6011632386114876,
+    "cost": 18.554417658314755
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": -1.1438878629023994,
+    "cost": 60.144286688708526
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": -1.9677122150452107,
+    "cost": 197.4795948346519
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": -3.1527492755050823,
+    "cost": 783.2856647474084
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": -0.059408814145701636,
+    "cost": 0.21816777729841771
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": -0.11848365687021192,
+    "cost": 0.6793746564959895
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": -0.2355013714995957,
+    "cost": 2.3541507230043837
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": -0.5750263699728105,
+    "cost": 13.217711462452492
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": -1.0878406378142411,
+    "cost": 49.76131495247499
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": -1.8494947052455095,
+    "cost": 176.39885903953018
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": -2.7963281056357476,
+    "cost": 705.9618596371696
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": -0.059831069262045206,
+    "cost": -0.3188172186324913
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": -0.1192783180309319,
+    "cost": -0.3773003596878127
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": -0.23688644608562004,
+    "cost": 0.2885976291793192
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": -0.5767950331001229,
+    "cost": 8.415537871362856
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": -1.085118789952289,
+    "cost": 41.034798423693076
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": -1.8217677545179307,
+    "cost": 159.9628770579397
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ig",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": -2.698767594643523,
+    "cost": 638.4800757130781
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": -0.0070002311717116275,
+    "cost": -6.834083345285196
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": -0.013997036026294008,
+    "cost": -13.667019475877604
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": -0.027977454688284237,
+    "cost": -27.385840513568848
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": -0.06986528272747734,
+    "cost": -68.76059405927822
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": -0.1396050798706526,
+    "cost": -138.06083239953935
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": -0.278094931135931,
+    "cost": -270.0657420002619
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": -0.6149604371032533,
+    "cost": -425.99125332738873
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": 0.0018473084056478896,
+    "cost": -7.380798932326428
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": 0.0037046643772400906,
+    "cost": -14.729761079475917
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": 0.007444751590720452,
+    "cost": -29.356185193723604
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": 0.01888553092230006,
+    "cost": -72.61137480840569
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": 0.038721658668525616,
+    "cost": -142.4067307092534
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": 0.08274590239810888,
+    "cost": -267.3955434022434
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": 0.3174765981841479,
+    "cost": -391.5775594067465
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": 0.012871675126931615,
+    "cost": -6.18135919950429
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": 0.025774973969581314,
+    "cost": -12.328236490965976
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": 0.051670144416629336,
+    "cost": -24.50667563902697
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": 0.13003351201729782,
+    "cost": -60.288869737327936
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": 0.2627449208404777,
+    "cost": -117.34629986607611
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": 0.5365978976189087,
+    "cost": -216.62131415657703
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": 1.4730964336648267,
+    "cost": -277.8598418053578
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": 0.014310268948890507,
+    "cost": -5.305395062902946
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": 0.028635729093217443,
+    "cost": -10.553070950097458
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": 0.057337226595790804,
+    "cost": -20.907867785091096
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": 0.14378602413629876,
+    "cost": -50.91230162448917
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": 0.2889557428535578,
+    "cost": -97.7464659911197
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": 0.5845076816432714,
+    "cost": -175.89570337785304
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": 1.5659770897604928,
+    "cost": -162.600992252982
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": 0.02054372623966982,
+    "cost": -4.620438393543933
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": 0.041112734100365964,
+    "cost": -9.183080093574109
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": 0.08231956041630979,
+    "cost": -18.165373967392945
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": 0.20635634104914297,
+    "cost": -44.095569268473774
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": 0.4137813209000495,
+    "cost": -84.55134615749917
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": 0.8287867493403829,
+    "cost": -152.7387157463598
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": 2.098485212565837,
+    "cost": -104.47835425522464
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": 0.02353695288102855,
+    "cost": -3.144159909876897
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": 0.04711355140624106,
+    "cost": -6.234442362146221
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": 0.09437284873655777,
+    "cost": -12.273338892605725
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": 0.2368084387929339,
+    "cost": -29.486141029619223
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": 0.47535640078000657,
+    "cost": -56.0354489560789
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": 0.9520618141912938,
+    "cost": -100.26124332966462
+  },
+  {
+    "probe_type": "logistic",
+    "method": "ga",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": 2.377578943419093,
+    "cost": 25.01867241671571
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": 0.024835354312767583,
+    "cost": -5.093606479095719
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": 0.049830931197343734,
+    "cost": -10.091947872741132
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": 0.1002796620950678,
+    "cost": -19.77734198727907
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": 0.25499964336243464,
+    "cost": -46.196341571041295
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": 0.5223095937663554,
+    "cost": -79.50569066735122
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": 1.0797170285209998,
+    "cost": -94.571371137022
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": 2.784200955702276,
+    "cost": 320.2101341644813
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": 0.05039584568244966,
+    "cost": -11.045887512632984
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": 0.10075678803665382,
+    "cost": -21.856986951931848
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": 0.20125654574031523,
+    "cost": -42.76045068677782
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": 0.4991154948264579,
+    "cost": -99.92524058557788
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": 0.9745012301073243,
+    "cost": -177.2863683691121
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": 1.824241377627158,
+    "cost": -269.02013790845825
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": 4.075857541981699,
+    "cost": -159.0750222486497
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": 0.050549092610928825,
+    "cost": -6.49397285705367
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": 0.10103618015371628,
+    "cost": -12.841832711705592
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": 0.20170644655531644,
+    "cost": -25.102296990844145
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": 0.49938527873614547,
+    "cost": -58.58684032691679
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": 0.9715641392171795,
+    "cost": -103.81522065855398
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": 1.7980752086620524,
+    "cost": -153.70780988174766
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": 3.7759124198495173,
+    "cost": 67.12361534419236
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": 0.0538627994199763,
+    "cost": -2.737762723623278
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": 0.10774381381170604,
+    "cost": -5.313532430142418
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": 0.21543041216786651,
+    "cost": -9.994887274389242
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": 0.5358314546257689,
+    "cost": -20.33802412543243
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": 1.0503696969560385,
+    "cost": -25.353073158634224
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": 1.9706929519704677,
+    "cost": 13.205867272654375
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": 4.1290929148962325,
+    "cost": 624.314753606234
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": 0.06152285398575037,
+    "cost": 2.375832282205875
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": 0.12329022139989369,
+    "cost": 4.9202384812787985
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": 0.24739175266710703,
+    "cost": 10.473307603705026
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": 0.6215252695969132,
+    "cost": 30.988742086727346
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": 1.235960484400666,
+    "cost": 78.46207496478425
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": 2.3665606295370956,
+    "cost": 232.18194034646652
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": 4.999719411683446,
+    "cost": 1403.9456359343678
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": 0.06442733085691232,
+    "cost": 3.778488783382279
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": 0.12913379176397932,
+    "cost": 7.755062908919536
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": 0.25919857687866116,
+    "cost": 16.27393066234056
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": 0.6515147028477256,
+    "cost": 46.46217672755472
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": 1.295592032949704,
+    "cost": 112.79802442470226
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": 2.4823846097654267,
+    "cost": 314.86527108853466
+  },
+  {
+    "probe_type": "logistic",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": 5.313842413945142,
+    "cost": 1712.8368596613373
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": 0.04798471231409593,
+    "cost": -1.4415052867459675
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": 0.09524722978210147,
+    "cost": -2.7288247886163792
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": 0.1873777238856776,
+    "cost": -4.903336155086525
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": 0.4417477216703588,
+    "cost": -8.462597548855435
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": 0.785540486156197,
+    "cost": -6.3959296541246085
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": 1.226516963042639,
+    "cost": 22.917891258250318
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": 1.9652091331987942,
+    "cost": 429.493663708542
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": 0.04540703032800784,
+    "cost": -1.7984345958530725
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": 0.09009019617183778,
+    "cost": -3.4525695542868142
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": 0.17706683800258724,
+    "cost": -6.3453414700239446
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": 0.41598995131706157,
+    "cost": -12.092665237097474
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": 0.7331806177952294,
+    "cost": -13.561471419862134
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": 1.1103913404048964,
+    "cost": 8.880489844044844
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": 1.5870267988502142,
+    "cost": 387.74897412964907
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": 0.051545924513534944,
+    "cost": 2.585970924670473
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": 0.1024957381010386,
+    "cost": 5.363938596503047
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": 0.20237544285757805,
+    "cost": 11.433598582377837
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": 0.4827054506527318,
+    "cost": 33.59414771674199
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": 0.8756743978448632,
+    "cost": 82.3078522388592
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": 1.4138294492610917,
+    "cost": 220.45486792619334
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": 2.2927070055780163,
+    "cost": 1193.668699008879
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": 0.051488630891058665,
+    "cost": 3.130686736158795
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": 0.10240666631707293,
+    "cost": 6.444692848460837
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": 0.20231004130413122,
+    "cost": 13.597434120540736
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": 0.48338214894658954,
+    "cost": 38.998630241978596
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": 0.8793562572088791,
+    "cost": 93.29648654962666
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": 1.4253747472194747,
+    "cost": 244.4624862663346
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": 2.3193593226289115,
+    "cost": 1306.7995028710086
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": 0.05072946884541954,
+    "cost": 1.2901628894915418
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": 0.10088331282575445,
+    "cost": 2.7382686849491025
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": 0.19923595116176693,
+    "cost": 6.075315608763029
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": 0.4754757470504951,
+    "cost": 19.40122523786431
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": 0.8627573199093731,
+    "cost": 51.3340650183497
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": 1.3893421919268916,
+    "cost": 148.5296393885185
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": 2.2208413992794735,
+    "cost": 954.4836237636846
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": 0.05104118865259896,
+    "cost": 1.006694396635821
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": 0.10150169311384474,
+    "cost": 2.1824371124158826
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": 0.2004570060379551,
+    "cost": 4.950375598672593
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": 0.4784687317331058,
+    "cost": 16.470511899988526
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": 0.8689233096040987,
+    "cost": 45.02065092444396
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": 1.4041263872598615,
+    "cost": 133.69901541893233
+  },
+  {
+    "probe_type": "mlp",
+    "method": "shap",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": 2.272007308745474,
+    "cost": 882.3728539575045
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": -0.031386034910194094,
+    "cost": -6.4656492152843725
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": -0.06292180301316586,
+    "cost": -12.796220457310772
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": -0.12637212776330597,
+    "cost": -25.05669382609275
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": -0.3181395456121124,
+    "cost": -58.69742023239181
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": -0.6295448398382398,
+    "cost": -104.62591980046929
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": -1.1137728272889114,
+    "cost": -156.65652366280202
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": -1.0810121954655652,
+    "cost": 154.9547709010186
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": -0.026265502518839093,
+    "cost": -10.482710301156233
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": -0.05253939948632348,
+    "cost": -20.773241711097103
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": -0.10508647302050941,
+    "cost": -40.77782945967127
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": -0.2621813400078235,
+    "cost": -96.27117517834205
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": -0.5179922661434847,
+    "cost": -174.15956544998824
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": -0.9716306322755212,
+    "cost": -275.0557277258777
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": -1.5916741865267967,
+    "cost": -38.21940062376939
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": -0.03175130595643552,
+    "cost": -16.742686391561204
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": -0.06353918223587789,
+    "cost": -33.16423563408724
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": -0.12720189012411537,
+    "cost": -65.06300143293049
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": -0.318421905334811,
+    "cost": -153.37042043893982
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": -0.6346279941816373,
+    "cost": -276.96601084949145
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": -1.2337157276450372,
+    "cost": -443.10170488314117
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": -2.5310129699223682,
+    "cost": -390.830670535175
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": -0.02834479083308747,
+    "cost": -15.308541959688183
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": -0.05671846160933986,
+    "cost": -30.35843527338288
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": -0.11354252957419768,
+    "cost": -59.676196635866894
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": -0.28439800698222373,
+    "cost": -141.55155257559417
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": -0.5687227917529408,
+    "cost": -258.46277196231256
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": -1.1218641413671855,
+    "cost": -423.6339582957931
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": -2.463242979999392,
+    "cost": -377.58067665560793
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": -0.023480253440511037,
+    "cost": -18.767296220307017
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": -0.04695732044574177,
+    "cost": -37.20698724692705
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": -0.093906492083362,
+    "cost": -73.13892527179797
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": -0.2346835960564909,
+    "cost": -173.63782632782824
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": -0.4687484513884888,
+    "cost": -318.5283815953737
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": -0.9311538126841085,
+    "cost": -533.3370036757882
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": -2.18441607743956,
+    "cost": -497.1581578531305
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": -0.020676759653010243,
+    "cost": -22.170436566099273
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": -0.041349954308672394,
+    "cost": -43.949650687620064
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": -0.08269147669011072,
+    "cost": -86.39549832371432
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": -0.20673297566013793,
+    "cost": -205.06661823569513
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": -0.41383130987949407,
+    "cost": -376.1494877614543
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": -0.8299349647209305,
+    "cost": -629.7045768416062
+  },
+  {
+    "probe_type": "mlp",
+    "method": "probe",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": -2.03734314547886,
+    "cost": -636.6682111218622
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": -0.01660119951467565,
+    "cost": -5.191110290269808
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": -0.033246810118577615,
+    "cost": -10.367731951364455
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": -0.06665740204763705,
+    "cost": -20.694329408484386
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": -0.1673648624084086,
+    "cost": -51.595446933073426
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": -0.3309650086950628,
+    "cost": -102.18624074094203
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": -0.5716407670523478,
+    "cost": -188.22821774026752
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": -0.6297028602361443,
+    "cost": -259.79323936013793
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": -0.03605308411877076,
+    "cost": -3.3195197525130147
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": -0.07221980596197593,
+    "cost": -6.5818583079315225
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": -0.14484241867367523,
+    "cost": -12.945362884817538
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": -0.3639877464152449,
+    "cost": -30.988560234195194
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": -0.7236866770676164,
+    "cost": -58.1167802329206
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": -1.3223637671688717,
+    "cost": -98.66203251160671
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": -1.7362127362607942,
+    "cost": -45.67794232320323
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": -0.039422524043815584,
+    "cost": -9.725805912270827
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": -0.07887542906243644,
+    "cost": -19.28163090839737
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": -0.15782718718866148,
+    "cost": -37.92271215310075
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": -0.39394509601158756,
+    "cost": -90.27710862538291
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": -0.7757232685274145,
+    "cost": -166.50567777547192
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": -1.4065519754685074,
+    "cost": -279.887703999225
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": -1.7946015231280346,
+    "cost": -321.74182018943884
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": -0.038254257901497016,
+    "cost": -10.221968707838192
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": -0.07651648052232947,
+    "cost": -20.267941957699193
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": -0.1530093123383674,
+    "cost": -39.87009161199775
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": -0.3810482781326575,
+    "cost": -94.92871307179706
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": -0.7464101249877592,
+    "cost": -174.9621261750748
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": -1.3312969751533625,
+    "cost": -292.76489275031884
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": -1.578081955321589,
+    "cost": -329.8466906535274
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": -0.03751107938831052,
+    "cost": -9.106331154984357
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": -0.07503724707114628,
+    "cost": -18.05893596765476
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": -0.15007442956961067,
+    "cost": -35.49403697036323
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": -0.37386868255394706,
+    "cost": -84.30091845788618
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": -0.7324180884352771,
+    "cost": -154.75597136895317
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": -1.30438072953784,
+    "cost": -256.2959199723006
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": -1.545607082916,
+    "cost": -264.51438800492303
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": -0.03765399421566525,
+    "cost": -8.958760667663828
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": -0.07532217639008505,
+    "cost": -17.768734355889507
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": -0.1506494893293243,
+    "cost": -34.91428261165736
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": -0.37531284841304485,
+    "cost": -82.91716713037756
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": -0.7352475766922266,
+    "cost": -152.162443816178
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": -1.309097031748335,
+    "cost": -251.91634224344304
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ig",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": -1.5508584800603908,
+    "cost": -265.12674596375274
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": -0.034013986729131175,
+    "cost": -11.742153155263214
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": -0.06811848273963604,
+    "cost": -23.412102493289154
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": -0.1365572230411364,
+    "cost": -46.563900666811804
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": -0.3426575453015654,
+    "cost": -114.59541532266874
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": -0.6791671310361365,
+    "cost": -223.09432462889754
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": -1.2295561610908938,
+    "cost": -411.47922864032955
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": -1.7074741891435385,
+    "cost": -662.9890637968913
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": -0.03726551221682515,
+    "cost": -17.145484928092586
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": -0.07454927414626183,
+    "cost": -34.026433252528314
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": -0.14912737046013114,
+    "cost": -67.01886743074643
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": -0.3719231245471,
+    "cost": -160.11569489075202
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": -0.731845878369972,
+    "cost": -296.9142034663184
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": -1.3338050287186662,
+    "cost": -507.71276015042076
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": -1.8823643576577263,
+    "cost": -625.4300648884309
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": -0.04129827312846345,
+    "cost": -15.560640724784808
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": -0.0825338084210124,
+    "cost": -30.830988722162846
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": -0.16477487762713994,
+    "cost": -60.53653002134575
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": -0.4084347847829217,
+    "cost": -143.29664481462666
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": -0.7953391391389372,
+    "cost": -261.41376621183656
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": -1.4224627197815436,
+    "cost": -430.96696355861616
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": -1.909342740318889,
+    "cost": -401.6799505456937
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": -0.04191560930272089,
+    "cost": -14.781026054764475
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": -0.08376764453441594,
+    "cost": -29.294960038965467
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": -0.16721876482754927,
+    "cost": -57.51760023491285
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": -0.4142525053052613,
+    "cost": -136.11727455303802
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": -0.8050279171720304,
+    "cost": -248.17931138791795
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": -1.4286202846293732,
+    "cost": -408.7352384810069
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": -1.852527118441941,
+    "cost": -402.7593692620186
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": -0.041741947399887847,
+    "cost": -15.375259549517226
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": -0.08339887986063273,
+    "cost": -30.44447610742195
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": -0.1663988822758776,
+    "cost": -59.69737368001959
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": -0.41155172635767395,
+    "cost": -140.6737334493646
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": -0.7973627257738886,
+    "cost": -254.73407171230886
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": -1.405246643235579,
+    "cost": -413.735441702943
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": -1.7893088787670208,
+    "cost": -363.6304133703534
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": -0.041551247749487215,
+    "cost": -15.116001848135106
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": -0.0830206158278697,
+    "cost": -29.931777582525427
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": -0.16565454164322616,
+    "cost": -58.70123389989309
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": -0.4097970367964837,
+    "cost": -138.4081508173515
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": -0.7943063831121656,
+    "cost": -250.86302823988288
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": -1.4013637183232253,
+    "cost": -408.13132421523363
+  },
+  {
+    "probe_type": "mlp",
+    "method": "ga",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": -1.7951682122290382,
+    "cost": -373.1805726034149
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 0.5,
+    "effect": 0.024835354312767583,
+    "cost": -5.093606479095719
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 1.0,
+    "effect": 0.049830931197343734,
+    "cost": -10.091947872741132
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 2.0,
+    "effect": 0.1002796620950678,
+    "cost": -19.77734198727907
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 5.0,
+    "effect": 0.25499964336243464,
+    "cost": -46.196341571041295
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 10.0,
+    "effect": 0.5223095937663554,
+    "cost": -79.50569066735122
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 20.0,
+    "effect": 1.0797170285209998,
+    "cost": -94.571371137022
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 5,
+    "alpha": 50.0,
+    "effect": 2.784200955702276,
+    "cost": 320.2101341644813
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 0.5,
+    "effect": 0.05039584568244966,
+    "cost": -11.045887512632984
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 1.0,
+    "effect": 0.10075678803665382,
+    "cost": -21.856986951931848
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 2.0,
+    "effect": 0.20125654574031523,
+    "cost": -42.76045068677782
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 5.0,
+    "effect": 0.4991154948264579,
+    "cost": -99.92524058557788
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 10.0,
+    "effect": 0.9745012301073243,
+    "cost": -177.2863683691121
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 20.0,
+    "effect": 1.824241377627158,
+    "cost": -269.02013790845825
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 10,
+    "alpha": 50.0,
+    "effect": 4.075857541981699,
+    "cost": -159.0750222486497
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 0.5,
+    "effect": 0.050549092610928825,
+    "cost": -6.49397285705367
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 1.0,
+    "effect": 0.10103618015371628,
+    "cost": -12.841832711705592
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 2.0,
+    "effect": 0.20170644655531644,
+    "cost": -25.102296990844145
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 5.0,
+    "effect": 0.49938527873614547,
+    "cost": -58.58684032691679
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 10.0,
+    "effect": 0.9715641392171795,
+    "cost": -103.81522065855398
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 20.0,
+    "effect": 1.7980752086620524,
+    "cost": -153.70780988174766
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 20,
+    "alpha": 50.0,
+    "effect": 3.7759124198495173,
+    "cost": 67.12361534419236
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 0.5,
+    "effect": 0.0538627994199763,
+    "cost": -2.737762723623278
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 1.0,
+    "effect": 0.10774381381170604,
+    "cost": -5.313532430142418
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 2.0,
+    "effect": 0.21543041216786651,
+    "cost": -9.994887274389242
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 5.0,
+    "effect": 0.5358314546257689,
+    "cost": -20.33802412543243
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 10.0,
+    "effect": 1.0503696969560385,
+    "cost": -25.353073158634224
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 20.0,
+    "effect": 1.9706929519704677,
+    "cost": 13.205867272654375
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 30,
+    "alpha": 50.0,
+    "effect": 4.1290929148962325,
+    "cost": 624.314753606234
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 0.5,
+    "effect": 0.06152285398575037,
+    "cost": 2.375832282205875
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 1.0,
+    "effect": 0.12329022139989369,
+    "cost": 4.9202384812787985
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 2.0,
+    "effect": 0.24739175266710703,
+    "cost": 10.473307603705026
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 5.0,
+    "effect": 0.6215252695969132,
+    "cost": 30.988742086727346
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 10.0,
+    "effect": 1.235960484400666,
+    "cost": 78.46207496478425
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 20.0,
+    "effect": 2.3665606295370956,
+    "cost": 232.18194034646652
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 50,
+    "alpha": 50.0,
+    "effect": 4.999719411683446,
+    "cost": 1403.9456359343678
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 0.5,
+    "effect": 0.06442733085691232,
+    "cost": 3.778488783382279
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 1.0,
+    "effect": 0.12913379176397932,
+    "cost": 7.755062908919536
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 2.0,
+    "effect": 0.25919857687866116,
+    "cost": 16.27393066234056
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 5.0,
+    "effect": 0.6515146458274043,
+    "cost": 46.46326596636367
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 10.0,
+    "effect": 1.295592082417665,
+    "cost": 112.79847829060091
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 20.0,
+    "effect": 2.482384394523154,
+    "cost": 314.86607481979706
+  },
+  {
+    "probe_type": "mlp",
+    "method": "actdiff",
+    "k": 65,
+    "alpha": 50.0,
+    "effect": 5.313842461525013,
+    "cost": 1712.8348934858584
+  }
+]

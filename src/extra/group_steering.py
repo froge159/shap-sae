@@ -3,7 +3,8 @@ Group steering: effect-vs-cost curves for multi-feature residual steering vector
 
 Part 1 — Build unit-norm steering vectors for each (probe_type, method, k):
   attribution methods: top-k by |score|, v = Σ attribution_i · W_dec[i]
-  frequency baseline:  top-k by activation frequency, uniform weights
+  actdiff baseline:    top-k by |mean_pos − mean_neg| activation difference,
+                       weights = signed mean difference (no attribution math)
 
 Part 2 — Sweep alpha; add α·v at blocks.7.hook_resid_post (no SAE encode/decode).
   effect = mean Δ logit-diff (wonderful − awful)
@@ -37,7 +38,7 @@ from utils import load_model, load_splits
 N_TOTAL_FEATURES = 32768
 CONFIG_PATH = Path("steering_config.json")
 OUT_PATH = Path("outputs/group_steering_results.json")
-METHODS = ("shap", "probe", "ig", "ga", "frequency")
+METHODS = ("shap", "probe", "ig", "ga", "actdiff")
 K_SUMMARY = 20
 
 
@@ -97,15 +98,45 @@ def load_mlp_scores() -> dict[str, np.ndarray]:
     }
 
 
-def activation_frequencies(activations_path: str, chunk_size: int = 2048) -> np.ndarray:
-    """Fraction of examples where each SAE feature is active (> 0)."""
-    acts = np.load(activations_path, mmap_mode="r")
+def activation_differences(
+    activations_path: str,
+    labels_path: str | None = None,
+    chunk_size: int = 2048,
+) -> np.ndarray:
+    """
+    Naive baseline scores: mean activation on positive examples minus mean on
+    negative examples, per SAE feature. No attribution / probe math.
+    """
+    acts_path = Path(activations_path)
+    if labels_path is None:
+        labels_path = str(acts_path.with_name("labels.npy"))
+    acts = np.load(acts_path, mmap_mode="r")
+    labels = np.asarray(np.load(labels_path))
+    if labels.shape[0] != acts.shape[0]:
+        raise ValueError(
+            f"labels length {labels.shape[0]} != activations n={acts.shape[0]}"
+        )
+
     n, d = acts.shape
-    counts = np.zeros(d, dtype=np.float64)
-    for start in tqdm(range(0, n, chunk_size), desc="Activation frequencies"):
+    sum_pos = np.zeros(d, dtype=np.float64)
+    sum_neg = np.zeros(d, dtype=np.float64)
+    n_pos = 0
+    n_neg = 0
+    for start in tqdm(range(0, n, chunk_size), desc="Activation differences"):
         chunk = np.asarray(acts[start : start + chunk_size], dtype=np.float32)
-        counts += (chunk > 0).sum(axis=0)
-    return counts / max(n, 1)
+        lab = labels[start : start + chunk_size]
+        pos_mask = lab == 1
+        neg_mask = lab == 0
+        if pos_mask.any():
+            sum_pos += chunk[pos_mask].sum(axis=0, dtype=np.float64)
+            n_pos += int(pos_mask.sum())
+        if neg_mask.any():
+            sum_neg += chunk[neg_mask].sum(axis=0, dtype=np.float64)
+            n_neg += int(neg_mask.sum())
+
+    if n_pos == 0 or n_neg == 0:
+        raise ValueError(f"Need both classes; got n_pos={n_pos}, n_neg={n_neg}")
+    return sum_pos / n_pos - sum_neg / n_neg
 
 
 def top_k_indices(scores: np.ndarray, k: int) -> np.ndarray:
@@ -136,24 +167,21 @@ def build_steering_vector(
 def build_all_steering_vectors(
     W_dec: np.ndarray,
     scores_by_method: dict[str, np.ndarray],
-    frequencies: np.ndarray,
     ks: list[int],
 ) -> dict[tuple[str, int], np.ndarray]:
     """
-    Returns {(method, k): unit vector} for attribution methods + frequency baseline.
+    Returns {(method, k): unit vector}.
+
+    Every method (including actdiff) uses the same recipe: top-k by |score|,
+    then v = Σ score_i · W_dec[i], unit-normalized.
     """
     vectors: dict[tuple[str, int], np.ndarray] = {}
 
     for method, scores in scores_by_method.items():
         for k in ks:
             ids = top_k_indices(scores, k)
-            weights = scores[ids]  # signed attribution weights
+            weights = scores[ids]  # signed weights (attribution or mean act-diff)
             vectors[(method, k)] = build_steering_vector(W_dec, ids, weights)
-
-    for k in ks:
-        ids = top_k_indices(frequencies, k)
-        weights = np.ones(len(ids), dtype=np.float64)
-        vectors[("frequency", k)] = build_steering_vector(W_dec, ids, weights)
 
     return vectors
 
@@ -376,8 +404,8 @@ def main() -> None:
         "mlp": load_mlp_scores(),
     }
 
-    print("Computing activation frequencies…")
-    frequencies = activation_frequencies(cfg["activations_path"])
+    print("Computing activation differences (pos − neg)…")
+    actdiff = activation_differences(cfg["activations_path"])
 
     print("Loading model + SAE…")
     model = load_model()
@@ -398,7 +426,8 @@ def main() -> None:
     print("Building steering vectors…")
     all_vectors: dict[tuple[str, str, int], np.ndarray] = {}
     for probe_type, scores in score_sets.items():
-        vecs = build_all_steering_vectors(W_dec, scores, frequencies, ks)
+        scores_with_baseline = {**scores, "actdiff": actdiff}
+        vecs = build_all_steering_vectors(W_dec, scores_with_baseline, ks)
         for (method, k), v in vecs.items():
             all_vectors[(probe_type, method, k)] = v
             print(
