@@ -72,16 +72,27 @@ K_LOCAL = 10
 K_GLOBAL = 10
 SEED = 42
 # "probe": ablate in MLP input (matches DeepSHAP's f). "lm": SAE edit + logit-diff.
-TARGET = "probe"
+TARGET = "lm"
 CHECKPOINT = "checkpoints/mlp_probe_layer_7.joblib"
 OUT_DIR = Path("outputs/local_shap_faithfulness")
 
 
 def probe_logit(probe: MLPClassifier, x_filtered: np.ndarray) -> float:
-    """Positive-class logit for a single filtered activation row."""
+    """
+    Positive-class logit for a single filtered activation row.
+
+    MLPClassifier has no decision_function; compute the pre-sigmoid logit from
+    the fitted weights so the ablation target matches DeepSHAP (TorchMLPProbe).
+    """
     x = np.asarray(x_filtered, dtype=np.float64).reshape(1, -1)
-    # decision_function for binary MLP = logit of class 1
-    return float(probe.decision_function(x)[0])
+    if len(probe.coefs_) != 2:
+        raise ValueError(
+            f"Expected a 1-hidden-layer MLP; got {len(probe.coefs_)} weight matrices"
+        )
+    W1, W2 = probe.coefs_
+    b1, b2 = probe.intercepts_
+    h = np.maximum(x @ W1 + b1, 0.0)
+    return float((h @ W2[:, 0] + b2[0])[0])
 
 
 def per_example_probe_ablation_deltas(
