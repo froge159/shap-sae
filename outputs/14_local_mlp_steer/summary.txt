@@ -1,0 +1,20 @@
+Local steering faithfulness (MLP probe / DeepSHAP)
+==================================================
+mode=ablation  candidates=top-20 local ∪ top-20 global  N=100  n_union=74
+
+Mean Spearman ρ across examples (± std)
+Importance (|attr| vs |Δ|):
+  local_SHAP      ρ=+0.385 ± 0.204
+  global_SHAP     ρ=-0.330 ± 0.207
+  Probe saliency  ρ=-0.217 ± 0.205
+  IG              ρ=-0.053 ± 0.194
+  GA              ρ=-0.034 ± 0.158
+Directional (attr vs Δ):
+  local_SHAP      ρ=-0.079 ± 0.211
+  global_SHAP     ρ=+0.013 ± 0.118
+  Probe saliency  ρ=+0.015 ± 0.152
+  IG              ρ=+0.134 ± 0.185
+  GA              ρ=+0.136 ± 0.192
+
+Fraction examples with ρ_local_SHAP > ρ_global_SHAP (importance): 1.000
+

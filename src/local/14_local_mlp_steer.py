@@ -1,8 +1,9 @@
 """
-Local steering faithfulness for the linear (logistic) SAE probe.
+Local steering faithfulness for the MLP SAE probe (DeepSHAP).
 
-Parallel to global_linear/9_steer.py, but:
-  - Attributions are per-sentence LinearSHAP φ(x) on the filtered feature set
+Parallel to local/9_local_steer.py, but:
+  - Attributions are per-sentence DeepSHAP φ(x) on the MLP filtered feature set
+  - Global rankings come from outputs/13_mlp_ranking/ (as in global_mlp/14_mlp_steer.py)
   - Candidates are per-example: top-k by |φ(x)| ∪ top-k by |Φ| (same recipe as
     local_shap_faithfulness.py) so local and global compete on an equal footing
   - Intervention effects Δ(x, i) are kept per example (never dataset-averaged
@@ -24,6 +25,7 @@ import numpy as np
 import torch
 from sae_lens import SAE
 from scipy.stats import spearmanr
+from sklearn.neural_network import MLPClassifier
 from tqdm import tqdm
 from transformer_lens import HookedTransformer
 
@@ -42,18 +44,20 @@ def _load(name: str, path: Path):
     return mod
 
 
-_shap7 = _load("shap7", _SRC / "global_linear" / "7_shap_recompute.py")
-_steer9 = _load("steer9", _SRC / "global_linear" / "9_steer.py")
+_shap12 = _load("mlp_shap12", _SRC / "global_mlp" / "12_mlp_shap.py")
+_steer14 = _load("mlp_steer14", _SRC / "global_mlp" / "14_mlp_steer.py")
 
 LAYER = 7
 N_EXAMPLES = 100
 N_BACKGROUND = 100
-K_LOCAL = 10
-K_GLOBAL = 10
+K_LOCAL = 20
+K_GLOBAL = 20
 SEED = 0
 MODE = "ablation"  # "ablation" | "steering"
 STEERING_ALPHA = 0.6723
-OUT_DIR = Path("outputs/9_local_steer")
+CHECKPOINT = "checkpoints/mlp_probe_layer_7.joblib"
+RANKINGS_DIR = Path("outputs/13_mlp_ranking")
+OUT_DIR = Path("outputs/14_local_mlp_steer")
 
 
 def spearman_pair(
@@ -128,9 +132,9 @@ def get_per_example_intervention_effects(
     n = all_tokens.shape[0]
     k = len(candidate_global)
     intervene_point = f"blocks.{layer}.hook_resid_post"
-    pad_id = _steer9._pad_token_id(model)
-    pos_id, neg_id = _steer9.sentiment_token_ids(
-        model, _steer9.POS_TOKEN, _steer9.NEG_TOKEN
+    pad_id = _steer14._pad_token_id(model)
+    pos_id, neg_id = _steer14.sentiment_token_ids(
+        model, _steer14.POS_TOKEN, _steer14.NEG_TOKEN
     )
 
     def recon_hook(resid_post, hook):
@@ -140,7 +144,7 @@ def get_per_example_intervention_effects(
         with torch.no_grad():
             with model.hooks(fwd_hooks=fwd_hooks):
                 logits = model(tokens)
-            return _steer9.last_non_pad_logit_diff(
+            return _steer14.last_non_pad_logit_diff(
                 logits, tokens, pad_id, pos_id, neg_id
             )
 
@@ -165,7 +169,7 @@ def get_per_example_intervention_effects(
             _mode=mode,
             _alpha=steering_alpha,
         ):
-            acts = _steer9._apply_feature_intervention(
+            acts = _steer14._apply_feature_intervention(
                 sae.encode(resid_post), feature_idx, _mode, _alpha
             )
             return sae.decode(acts)
@@ -193,7 +197,6 @@ def per_example_faithfulness(
     delta_signed: (n_examples, n_union)
     """
     n = local_shap.shape[0]
-    # filtered idx → column in union / delta
     col_of = {int(f): j for j, f in enumerate(union_local)}
     out: dict[str, dict] = {}
 
@@ -254,7 +257,7 @@ def print_summary(
     summary: dict, mode: str, k_local: int, k_global: int, n: int, n_union: int
 ) -> str:
     lines = [
-        "Local steering faithfulness (linear probe)",
+        "Local steering faithfulness (MLP probe / DeepSHAP)",
         "=" * 50,
         f"mode={mode}  candidates=top-{k_local} local ∪ top-{k_global} global  "
         f"N={n}  n_union={n_union}",
@@ -265,7 +268,7 @@ def print_summary(
     order = [
         "local_SHAP",
         "global_SHAP",
-        "Probe weights",
+        "Probe saliency",
         "IG",
         "GA",
     ]
@@ -292,23 +295,37 @@ def print_summary(
 
 
 def main() -> None:
-    feature_indices = np.load("outputs/3_shap/shap_feature_indices.npy")
-    sae_probe = joblib.load("checkpoints/probe_layer_7.joblib")
-    sae_probe.verbose = 0
+    payload = joblib.load(CHECKPOINT)
+    probe: MLPClassifier = payload["probe"]
+    feature_indices = np.asarray(payload["feature_indices"])
+    ranking_indices = np.load(RANKINGS_DIR / "feature_indices.npy")
+    if not np.array_equal(feature_indices, ranking_indices):
+        raise ValueError(
+            "Checkpoint feature_indices != outputs/13_mlp_ranking/feature_indices.npy"
+        )
 
-    probe_full = np.asarray(sae_probe.coef_[0], dtype=np.float64)
-    ig_full = np.load("outputs/8_rankings_recompute/ig_scores.npy").astype(np.float64)
-    ga_full = np.load("outputs/8_rankings_recompute/ga_scores.npy").astype(np.float64)
-    shap_global_full = np.load(
-        "outputs/7_shap_recompute/phi_sentiment_layer7_signed.npy"
-    ).astype(np.float64)
+    probe_f = np.load(RANKINGS_DIR / "probe_scores.npy").astype(np.float64)
+    ig_f = np.load(RANKINGS_DIR / "ig_scores.npy").astype(np.float64)
+    ga_f = np.load(RANKINGS_DIR / "ga_scores.npy").astype(np.float64)
+    shap_global_f = np.load(RANKINGS_DIR / "shap_scores.npy").astype(np.float64)
 
-    probe_f = probe_full[feature_indices]
-    ig_f = ig_full[feature_indices]
-    ga_f = ga_full[feature_indices]
-    shap_global_f = shap_global_full[feature_indices]
+    n_filt = len(feature_indices)
+    for name, arr in [
+        ("probe", probe_f),
+        ("ig", ig_f),
+        ("ga", ga_f),
+        ("shap", shap_global_f),
+    ]:
+        if arr.shape != (n_filt,):
+            raise ValueError(
+                f"{name}_scores shape {arr.shape} != ({n_filt},) filtered width"
+            )
 
-    # Sample N SHAP-split examples + background; compute local LinearSHAP.
+    print(
+        f"MLP probe: n_filtered={n_filt}, hidden={payload.get('hidden_dim')}, "
+        f"mode={MODE}, alpha={STEERING_ALPHA}"
+    )
+
     rng = np.random.default_rng(SEED)
     shap_acts = np.load(f"activations/shap/layer_{LAYER}/activations.npy")
     train_acts = np.load(f"activations/probe_train/layer_{LAYER}/activations.npy")
@@ -318,12 +335,10 @@ def main() -> None:
     background = train_acts[bg_idx]
 
     print(
-        f"Computing local LinearSHAP on {N_EXAMPLES} examples × "
+        f"Computing local DeepSHAP on {N_EXAMPLES} examples × "
         f"{len(feature_indices)} features…"
     )
-    local_shap = _shap7.run_linearshap(
-        sae_probe, shap_eval, background, feature_indices
-    )
+    local_shap = _shap12.run_deepshap(probe, shap_eval, background, feature_indices)
     print(f"  local_shap shape={local_shap.shape}")
 
     cands_per_example, union_local = build_per_example_candidates(
@@ -345,13 +360,12 @@ def main() -> None:
     sentences = [shap_ds[int(i)]["sentence"] for i in pick]
     all_tokens = model.to_tokens(sentences)
 
-    pos_id, neg_id = _steer9.sentiment_token_ids(model)
+    pos_id, neg_id = _steer14.sentiment_token_ids(model)
     print(
-        f"Logit-diff readout: {_steer9.POS_TOKEN!r}({pos_id}) - "
-        f"{_steer9.NEG_TOKEN!r}({neg_id}); N={N_EXAMPLES}, mode={MODE}"
+        f"Logit-diff readout: {_steer14.POS_TOKEN!r}({pos_id}) - "
+        f"{_steer14.NEG_TOKEN!r}({neg_id}); N={N_EXAMPLES}, mode={MODE}"
     )
 
-    # Intervene on the union once; ρ uses each example's own candidate subset.
     delta_signed, delta_abs = get_per_example_intervention_effects(
         model,
         sae,
@@ -364,7 +378,7 @@ def main() -> None:
 
     method_scores_f = {
         "global_SHAP": shap_global_f,
-        "Probe weights": probe_f,
+        "Probe saliency": probe_f,
         "IG": ig_f,
         "GA": ga_f,
     }
@@ -377,7 +391,6 @@ def main() -> None:
     )
     print("\n" + text)
 
-    # Mean |Δ| ranking preview over the union (display only).
     mean_abs = delta_abs.mean(axis=0)
     mean_signed = delta_signed.mean(axis=0)
     print("Top union features by mean_|Δ| (display only):")
@@ -394,7 +407,6 @@ def main() -> None:
     np.save(OUT_DIR / "union_local.npy", union_local)
     np.save(OUT_DIR / "union_global.npy", union_global)
     np.save(OUT_DIR / "n_cands_per_example.npy", n_cands)
-    # Ragged per-example candidate lists (object array of 1d int arrays).
     np.save(OUT_DIR / "cands_per_example.npy", np.asarray(cands_per_example, dtype=object))
     np.save(OUT_DIR / "local_shap.npy", local_shap)
     np.save(OUT_DIR / f"delta_signed_{MODE}.npy", delta_signed)
@@ -414,6 +426,7 @@ def main() -> None:
                 "mean_n_cands": float(n_cands.mean()),
                 "steering_alpha": STEERING_ALPHA,
                 "seed": SEED,
+                "checkpoint": CHECKPOINT,
                 **summary,
             },
             f,

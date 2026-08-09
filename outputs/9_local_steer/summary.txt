@@ -1,0 +1,20 @@
+Local steering faithfulness (linear probe)
+==================================================
+mode=ablation  candidates=top-10 local ∪ top-10 global  N=100  n_union=56
+
+Mean Spearman ρ across examples (± std)
+Importance (|attr| vs |Δ|):
+  local_SHAP      ρ=+0.298 ± 0.337
+  global_SHAP     ρ=-0.564 ± 0.286
+  Probe weights   ρ=-0.461 ± 0.203
+  IG              ρ=-0.366 ± 0.316
+  GA              ρ=-0.207 ± 0.328
+Directional (attr vs Δ):
+  local_SHAP      ρ=-0.047 ± 0.326
+  global_SHAP     ρ=+0.028 ± 0.161
+  Probe weights   ρ=-0.086 ± 0.219
+  IG              ρ=+0.086 ± 0.198
+  GA              ρ=+0.056 ± 0.211
+
+Fraction examples with ρ_local_SHAP > ρ_global_SHAP (importance): 0.960
+
