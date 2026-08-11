@@ -5,14 +5,20 @@ Procedure
 ---------
 1. Estimate natural positive-activation scales for ranking candidates.
 2. Build an α grid at {0.5, 1, 2, 4} × median scale.
-3. Pilot-steer a few high-|score| features on a small val subset.
+3. Pilot-steer a few high-|score| features on a small *train* subset.
 4. Recommend the smallest α with measurable |ΔP| that is not saturated.
+
+Caveat: ΔP here is a layer-11 residual probe's P(positive). The steer scripts
+that consume α read out a GPT-2 logit difference instead, so the acceptance
+threshold does not transfer between the two scales — α is a rough magnitude,
+not a tuned hyperparameter.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from pathlib import Path
 
 import joblib
@@ -21,7 +27,11 @@ import torch
 from sae_lens import SAE
 from tqdm import tqdm
 
-from utils import load_model, load_splits
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from utils import checkpoint_path, load_model, load_splits, output_path
 
 # --- reuse intervention helpers from 9_steer.py (invalid module name) ---
 _STEER_PATH = Path(__file__).resolve().parent / "9_steer.py"
@@ -38,31 +48,46 @@ N_PILOT_EXAMPLES = 200
 SCALE_MULTIPLIERS = (0.5, 1.0, 2.0, 4.0)
 MIN_MEAN_ABS_DP = 0.02
 MAX_SATURATION_FRAC = 0.25  # fraction of examples with P < 0.02 or P > 0.98
-OUT_DIR = "outputs/9.5_tuning"
+OUT_DIR = output_path("9.5_tuning")
 ACTIVATIONS_PATH = f"activations/probe_train/layer_{LAYER}/activations.npy"
 
 
 def load_ranking_candidates(k: int = K_CANDIDATES):
-    sae_probe = joblib.load(f"checkpoints/probe_layer_{LAYER}.joblib")
-    probe_scores = sae_probe.coef_[0]
-    ig_scores = np.load("outputs/8_rankings_recompute/ig_scores.npy")
-    ga_scores = np.load("outputs/8_rankings_recompute/ga_scores.npy")
-    shap_scores = np.load("outputs/7_shap_recompute/phi_sentiment_layer7_signed.npy")
+    """
+    Union of each method's top-k features, as global SAE ids.
 
-    probe_ranks, ig_ranks, ga_ranks, shap_ranks = steer9.compile_rankings(
-        ig_scores, probe_scores, ga_scores, shap_scores
-    )
-    all_candidates, *_ = steer9.get_ablation_candidates(
-        probe_ranks, ig_ranks, shap_ranks, ga_ranks, k=k
-    )
+    Candidates are drawn from the same filtered pool 9_steer intervenes on, so
+    the α this script calibrates is calibrated on features that actually get
+    steered. All four score vectors are full width; they are sliced to the
+    filtered axis before ranking and mapped back through `feature_indices`.
+    """
+    feature_indices = np.load(output_path("3_shap", "shap_feature_indices.npy"))
+    sae_probe = joblib.load(checkpoint_path(f"probe_layer_{LAYER}.joblib"))
 
+    scores_by_method = {
+        "probe": np.asarray(sae_probe.coef_[0], dtype=np.float64),
+        "ig": np.load(output_path("8_rankings_recompute", "ig_scores.npy")),
+        "ga": np.load(output_path("8_rankings_recompute", "ga_scores.npy")),
+        "shap": np.load(
+            output_path("7_shap_recompute", "phi_sentiment_layer7_signed.npy")
+        ),
+    }
+
+    globals_per_method = []
+    for scores in scores_by_method.values():
+        _, global_idx = steer9.get_shap_candidates(
+            scores[feature_indices], feature_indices, k=k, selection="top"
+        )
+        globals_per_method.append(global_idx)
+    cand = np.unique(np.concatenate(globals_per_method))
+
+    shap_scores = scores_by_method["shap"]
     # Pilot features: top-|SHAP| within the candidate union
-    cand = np.asarray(all_candidates)
     order = np.argsort(np.abs(shap_scores[cand]))[::-1]
     pilot_features = cand[order[:N_PILOT_FEATURES]]
 
     return {
-        "probe_scores": probe_scores,
+        "probe_scores": scores_by_method["probe"],
         "shap_scores": shap_scores,
         "all_candidates": cand,
         "pilot_features": pilot_features,
@@ -112,7 +137,6 @@ def pilot_effects_for_alpha(
     """
     intervene_point = f"blocks.{LAYER}.hook_resid_post"
     readout_point = f"blocks.{readout_layer}.hook_resid_post"
-    pad_id = steer9._pad_token_id(model)
     resid_store: dict = {}
 
     def capture_hook(resid_post, hook):
@@ -120,7 +144,7 @@ def pilot_effects_for_alpha(
         return resid_post
 
     def probe_prob(tokens: torch.Tensor) -> float:
-        pooled = steer9.pool_last_non_pad_token(tokens, resid_store["resid"], pad_id)
+        pooled = steer9.pool_last_non_pad_token(model, tokens, resid_store["resid"])
         return float(residual_probe.predict_proba(pooled.reshape(1, -1))[0, 1])
 
     delta_abs: dict[int, float] = {}
@@ -174,7 +198,6 @@ def compute_recon_baseline_probs(
 ) -> np.ndarray:
     intervene_point = f"blocks.{LAYER}.hook_resid_post"
     readout_point = f"blocks.{readout_layer}.hook_resid_post"
-    pad_id = steer9._pad_token_id(model)
     resid_store: dict = {}
 
     def capture_hook(resid_post, hook):
@@ -192,9 +215,7 @@ def compute_recon_baseline_probs(
                 fwd_hooks=[(intervene_point, recon_hook), (readout_point, capture_hook)]
             ):
                 model(tokens)
-            pooled = steer9.pool_last_non_pad_token(
-                tokens, resid_store["resid"], pad_id
-            )
+            pooled = steer9.pool_last_non_pad_token(model, tokens, resid_store["resid"])
             probs.append(
                 float(residual_probe.predict_proba(pooled.reshape(1, -1))[0, 1])
             )
@@ -261,6 +282,7 @@ def print_pilot_table(rows: list[dict]) -> None:
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
+    print(f"Candidate pool + α report → {OUT_DIR}/")
 
     ranking = load_ranking_candidates()
     candidates = ranking["all_candidates"]
@@ -290,7 +312,7 @@ def main():
         f"α × {np.median(norms):.4f}"
     )
 
-    train_ds, val_ds, _ = load_splits()
+    train_ds, _, _ = load_splits()
     readout_layer = model.cfg.n_layers - 1
 
     train_tokens = model.to_tokens(list(train_ds["sentence"]))
@@ -300,17 +322,22 @@ def main():
         train_tokens,
         train_labels,
         layer=readout_layer,
-        checkpoint_path=f"checkpoints/residual_probe_layer_{readout_layer}.joblib",
+        checkpoint_path=str(
+            checkpoint_path(f"residual_probe_layer_{readout_layer}.joblib")
+        ),
     )
 
-    # Fixed val subset for all α (first N examples; deterministic)
-    n_pilot = min(N_PILOT_EXAMPLES, len(val_ds))
-    val_sentences = list(val_ds["sentence"][:n_pilot])
-    val_tokens = model.to_tokens(val_sentences)
-    print(f"\nPilot subset: {n_pilot} val examples × {len(pilot_features)} features")
+    # Pilot on TRAIN, not val or held-out. α only has to land in a range where
+    # the effect is measurable and unsaturated — a property of the model, not of
+    # labels — so it needs no held-out data, and tuning it on the split that
+    # 9_steer later scores would select the hyperparameter on the eval set.
+    n_pilot = min(N_PILOT_EXAMPLES, len(train_ds))
+    pilot_sentences = list(train_ds["sentence"][:n_pilot])
+    pilot_tokens = model.to_tokens(pilot_sentences)
+    print(f"\nPilot subset: {n_pilot} train examples × {len(pilot_features)} features")
 
     baseline_probs = compute_recon_baseline_probs(
-        model, sae, residual_probe, val_tokens, readout_layer
+        model, sae, residual_probe, pilot_tokens, readout_layer
     )
 
     rows = []
@@ -320,7 +347,7 @@ def main():
             model,
             sae,
             residual_probe,
-            val_tokens,
+            pilot_tokens,
             pilot_features,
             alpha=alpha,
             readout_layer=readout_layer,
@@ -341,7 +368,7 @@ def main():
     lines.append(f"median_positive_activation_scale = {median_scale:.6f}")
     lines.append(f"median_decoder_norm = {float(np.median(norms)):.6f}")
     lines.append(f"pilot_features = {pilot_features.tolist()}")
-    lines.append(f"n_pilot_examples = {n_pilot}")
+    lines.append(f"n_pilot_examples = {n_pilot} (train split)")
     lines.append(
         f"criteria: mean|ΔP| >= {MIN_MEAN_ABS_DP}, sat_frac <= {MAX_SATURATION_FRAC}"
     )
@@ -364,7 +391,17 @@ def main():
             f"\nRecommended STEERING_ALPHA = {best['alpha']:.4f}  "
             f"(mean|ΔP|={best['mean_abs_dp']:.4f}, sat={best['saturation_frac']:.3f})"
         )
-        print("Set this in src/secondary/9_steer.py and run the full steer once.")
+        print(
+            "Pass this as --alpha to src/global_linear/9_steer.py (and the MLP / "
+            "local steer scripts) and run the full steer once."
+        )
+        print(
+            "CAVEAT: α is calibrated here against this residual probe's P(positive) "
+            f"at layer {readout_layer}. The steer scripts read out a GPT-2 logit "
+            "difference instead, so the mean|ΔP| ≥ "
+            f"{MIN_MEAN_ABS_DP} threshold does not transfer to that scale — treat α "
+            "as a rough 'measurable but unsaturated' magnitude, not a tuned value."
+        )
 
     out_txt = Path(OUT_DIR) / "alpha_calibration.txt"
     out_txt.write_text("\n".join(lines) + "\n")

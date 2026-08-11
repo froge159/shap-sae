@@ -1,16 +1,20 @@
 """
 DeepSHAP attributions for the filtered-feature MLP probe.
 
-Same structure as secondary/7_shap_recompute.py (mean signed Phi, sign
+Same structure as global_linear/7_shap_recompute.py (mean signed Phi, sign
 consistency, top-k), but:
-  - Explains the saved MLP probe (checkpoints/mlp_probe_layer_*.joblib)
+  - Explains the saved MLP probe (mlp_probe_layer_*.joblib)
   - Uses only the probe's filtered SAE feature indices
   - Uses shap.DeepExplainer on a PyTorch clone of the sklearn MLP
+  - Explains the pre-sigmoid **logit**. That is a third target function: 3_shap_comp
+    explains `predict_proba`, 7_shap_recompute the log-odds margin. Magnitudes are
+    not comparable across the three; only rankings within one arm are.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import joblib
@@ -20,36 +24,16 @@ import torch
 import torch.nn as nn
 from sklearn.neural_network import MLPClassifier
 
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
-def prepare_shap_inputs(
-    activations_dir="activations",
-    layer=7,
-    n_background=100,
-    n_shap=500,
-    seed=42,
-):
-    """
-    Sample background (train) and eval (SHAP held-out) activations.
-
-    Returns full-width tensors of shape (n, 32768); caller slices to filtered
-    features.
-    """
-    rng = np.random.default_rng(seed)
-
-    train_activations = np.load(
-        f"{activations_dir}/probe_train/layer_{layer}/activations.npy"
-    )
-    shap_activations = np.load(
-        f"{activations_dir}/shap/layer_{layer}/activations.npy"
-    )
-
-    bg_idx = rng.choice(len(train_activations), size=n_background, replace=False)
-    background = train_activations[bg_idx]
-
-    shap_idx = rng.choice(len(shap_activations), size=n_shap, replace=False)
-    shap_eval = shap_activations[shap_idx]
-
-    return shap_eval, background, bg_idx
+from utils import (
+    DEFAULT_N_EVAL,
+    checkpoint_path,
+    load_eval_and_background,
+    output_path,
+)
 
 
 class TorchMLPProbe(nn.Module):
@@ -175,19 +159,27 @@ def get_top_shap_features(Phi: np.ndarray, k: int = 50):
 
 
 def main(
-    checkpoint_path: str = "checkpoints/mlp_probe_layer_7.joblib",
-    out_dir: str = "outputs/12_mlp_shap",
+    ckpt_path: Path | None = None,
+    out_dir: Path | None = None,
     layer: int = 7,
+    n_shap: int = DEFAULT_N_EVAL,
 ):
-    payload = joblib.load(checkpoint_path)
+    ckpt_path = ckpt_path or checkpoint_path(f"mlp_probe_layer_{layer}.joblib")
+    out_dir = Path(out_dir) if out_dir else output_path("12_mlp_shap")
+
+    payload = joblib.load(ckpt_path)
     probe: MLPClassifier = payload["probe"]
     feature_indices = np.asarray(payload["feature_indices"])
     print(
-        f"Loaded MLP probe from {checkpoint_path}  "
+        f"Loaded MLP probe from {ckpt_path}  "
         f"(n_filtered={len(feature_indices)}, hidden={payload.get('hidden_dim')})"
     )
 
-    shap_eval, background, bg_idx = prepare_shap_inputs(layer=layer)
+    # Same shared sampler as the linear arm, so 13_mlp_ranking's IG/GA and the
+    # two arms' Phis all describe the same held-out rows.
+    shap_eval, background, eval_idx, bg_idx = load_eval_and_background(
+        layer=layer, n_eval=n_shap
+    )
     print(
         f"DeepSHAP on {len(shap_eval)} eval / {len(background)} background "
         f"examples × {len(feature_indices)} features"
@@ -215,6 +207,7 @@ def main(
     np.save(f"{out_dir}/top_k_idx_layer{layer}.npy", top_k_idx)
     np.save(f"{out_dir}/top_k_Phi_layer{layer}.npy", top_k_Phi)
     np.save(f"{out_dir}/background_indices_layer{layer}.npy", bg_idx)
+    np.save(f"{out_dir}/eval_indices_layer{layer}.npy", eval_idx)
     print(f"\nWrote outputs → {out_dir}/")
 
 

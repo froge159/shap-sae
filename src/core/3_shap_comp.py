@@ -1,48 +1,73 @@
 import sys
 import warnings
+from pathlib import Path
 
 import numpy as np
 import shap
 import joblib
-from sklearn.pipeline import Pipeline
 from tqdm import tqdm
 
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
-def prepare_shap_inputs(activations_dir="activations", layer=7, n_background=100, n_shap=500, seed=42): # change n_shap to full split size (check first)
+from utils import (
+    DEFAULT_N_BACKGROUND,
+    DEFAULT_N_EVAL,
+    CANONICAL_SEED,
+    checkpoint_path,
+    load_activations,
+    load_eval_and_background,
+    output_path,
+)
+
+
+def prepare_shap_inputs(
+    activations_dir="activations",
+    layer=7,
+    n_background=DEFAULT_N_BACKGROUND,
+    n_shap=500,
+    seed=CANONICAL_SEED,
+):
     """
-    activations: shape (N_sentences, 32768) 
+    Canonical eval/background rows, shape (n, 32768).
+
+    Thin wrapper over utils.load_eval_and_background so KernelSHAP here,
+    LinearSHAP/DeepSHAP downstream, and IG/GA in the ranking scripts all
+    explain the same rows. n_shap stays modest by default because KernelSHAP
+    is O(n_eval x nsamples); the exact explainers can afford far more.
     """
-    rng = np.random.default_rng(seed)
-    
-    #test_activations = np.load(f"{activations_dir}/probe_val/layer_{layer}/activations.npy")
-    train_activations = np.load(f"{activations_dir}/probe_train/layer_{layer}/activations.npy")
-    shap_activations = np.load(f"{activations_dir}/shap/layer_{layer}/activations.npy")
-    
-    # Fixed background:
-    bg_idx = rng.choice(len(train_activations), size=n_background, replace=False)
-    background = train_activations[bg_idx]     # shape: (n_background, 32768)
-    
-    # SHAP samples:
-    shap_idx = rng.choice(len(shap_activations), size=n_shap, replace=False)
-    shap_eval = shap_activations[shap_idx]         # shape: (n_shap, 32768)
-    
-    return shap_eval, background, bg_idx
+    return load_eval_and_background(
+        layer=layer,
+        n_eval=n_shap,
+        n_background=n_background,
+        seed=seed,
+        activations_dir=activations_dir,
+    )
 
 
-def get_shap_feature_mask(probe, activations: np.ndarray,  min_activation_freq: float = 0.05):
+def get_shap_feature_mask(probe, val_activations: np.ndarray, min_activation_freq: float = 0.05):
+    """
+    Filtered feature set: non-zero probe weight AND active often enough.
+
+    `val_activations` must come from the *val* split. This mask defines the
+    MLP probe's input layer and the steering candidate pool, so deriving it
+    from the shap split would let the held-out set shape the models it is
+    later used to evaluate.
+    """
     # Filter 1: non-zero probe weights
     nonzero_mask = probe.coef_[0] != 0          # shape: (32768,)
-    
+
     # Filter 2: activation frequency on val set
-    activation_freq = (activations > 0).mean(axis=0)   # shape: (32768,)
+    activation_freq = (val_activations > 0).mean(axis=0)   # shape: (32768,)
     freq_mask = activation_freq >= min_activation_freq
-    
+
     combined_mask = nonzero_mask & freq_mask
     feature_indices = np.where(combined_mask)[0]
-    
+
     print(f"Non-zero probe weights: {nonzero_mask.sum()}")
     print(f"After frequency filter: {len(feature_indices)}")
-    
+
     return feature_indices
 
 
@@ -129,26 +154,47 @@ def get_top_shap_features(Phi: np.ndarray, k: int = 50):
 
 
 
-def main(checkpoint_dir: str):
-    
-    probe = joblib.load(f"{checkpoint_dir}/probe_layer_7.joblib")
+def main(
+    checkpoint_dir: Path | None = None,
+    layer: int = 7,
+    out_dir: Path | None = None,
+    n_shap: int = 500,
+):
+    checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else checkpoint_path()
+    out_dir = Path(out_dir) if out_dir else output_path("3_shap")
+
+    probe = joblib.load(checkpoint_dir / f"probe_layer_{layer}.joblib")
     probe.verbose = 0
-    shap_eval, background, bg_idx = prepare_shap_inputs()
-    feature_indices = get_shap_feature_mask(probe, shap_eval)
+
+    # Mask comes from val; attributions come from the shap held-out split.
+    val_activations = load_activations("val", layer, mmap=True)
+    feature_indices = get_shap_feature_mask(probe, val_activations)
+
+    shap_eval, background, eval_idx, bg_idx = prepare_shap_inputs(
+        layer=layer, n_shap=n_shap
+    )
+    print(
+        f"KernelSHAP on {len(shap_eval)} of the canonical {DEFAULT_N_EVAL} held-out "
+        f"rows ({len(background)} background). Downstream scripts that default to "
+        f"DEFAULT_N_EVAL describe a superset of these rows."
+    )
     shap_values = run_kernelshap(probe, shap_eval, background, feature_indices)
     Phi = build_attribution_matrix(shap_values, feature_indices)
     top_k_idx, top_k_Phi = get_top_shap_features(Phi)
     print(top_k_idx)
     print(top_k_Phi)
 
-    
-    np.save("outputs/shap_values_raw.npy", shap_values)
-    np.save("outputs/shap_feature_indices.npy", feature_indices)
-    np.save("outputs/phi_sentiment_layer7.npy", Phi)
-    np.save("outputs/top_k_idx_layer7.npy", top_k_idx)
-    np.save("outputs/top_k_Phi_layer7.npy", top_k_Phi)
-    np.save("outputs/background_indices_layer7.npy", bg_idx)
+    out = out_dir
+    out.mkdir(parents=True, exist_ok=True)
+    np.save(out / "shap_values_raw.npy", shap_values)
+    np.save(out / "shap_feature_indices.npy", feature_indices)
+    np.save(out / f"phi_sentiment_layer{layer}.npy", Phi)
+    np.save(out / f"top_k_idx_layer{layer}.npy", top_k_idx)
+    np.save(out / f"top_k_Phi_layer{layer}.npy", top_k_Phi)
+    np.save(out / f"background_indices_layer{layer}.npy", bg_idx)
+    np.save(out / f"eval_indices_layer{layer}.npy", eval_idx)
+    print(f"\nWrote outputs -> {out}/")
 
 
 if __name__ == "__main__":
-    main(checkpoint_dir="checkpoints")
+    main()

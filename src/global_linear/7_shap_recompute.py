@@ -3,62 +3,40 @@ Recompute SHAP with LinearExplainer (exact for the linear probe).
 
 Differences from core/3_shap_comp.py:
   - LinearExplainer instead of KernelExplainer
+  - Explains the **log-odds margin**, not `predict_proba` — magnitudes are on a
+    different scale from 3_shap_comp's Φ and are not interchangeable with it
+    (rank correlations survive the monotone link; effect sizes do not)
   - Phi = mean signed SHAP (not mean absolute)
   - Also reports per-feature sign-consistency (% of examples agreeing on sign)
+  - Deliberately explains **all** 32768 features rather than the
+    `get_shap_feature_mask` subset: LinearExplainer is exact and cheap, so there
+    is no reason to filter. Downstream consumers that need the filtered pool
+    slice this Φ by `3_shap/shap_feature_indices.npy`.
 """
 
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 
 import joblib
 import numpy as np
 import shap
 from sklearn.linear_model import LogisticRegression
 
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
-def prepare_shap_inputs(
-    activations_dir="activations",
-    layer=7,
-    n_background=100,
-    n_shap=500,
-    seed=42,
-):
-    """
-    activations: shape (N_sentences, 32768)
-    """
-    rng = np.random.default_rng(seed)
+from utils import (
+    DEFAULT_N_EVAL,
+    checkpoint_path,
+    load_eval_and_background,
+    output_path,
+)
 
-    train_activations = np.load(
-        f"{activations_dir}/probe_train/layer_{layer}/activations.npy"
-    )
-    shap_activations = np.load(
-        f"{activations_dir}/shap/layer_{layer}/activations.npy"
-    )
-
-    bg_idx = rng.choice(len(train_activations), size=n_background, replace=False)
-    background = train_activations[bg_idx]
-
-    shap_idx = rng.choice(len(shap_activations), size=n_shap, replace=False)
-    shap_eval = shap_activations[shap_idx]
-
-    return shap_eval, background, bg_idx
-
-
-def get_shap_feature_mask(
-    probe, activations: np.ndarray, min_activation_freq: float = 0.05
-):
-    nonzero_mask = probe.coef_[0] != 0
-    activation_freq = (activations > 0).mean(axis=0)
-    freq_mask = activation_freq >= min_activation_freq
-
-    combined_mask = nonzero_mask & freq_mask
-    feature_indices = np.where(combined_mask)[0]
-
-    print(f"Non-zero probe weights: {nonzero_mask.sum()}")
-    print(f"After frequency filter: {len(feature_indices)}")
-
-    return feature_indices
+# The feature mask lives in core/3_shap_comp.py; do not re-derive it here.
 
 
 def make_filtered_probe(probe: LogisticRegression, feature_indices: np.ndarray):
@@ -134,11 +112,26 @@ def get_top_shap_features(Phi: np.ndarray, k: int = 50):
     return top_k_idx, Phi[top_k_idx]
 
 
-def main(checkpoint_dir: str = "checkpoints", out_dir: str = "outputs/7_shap_recompute"):
-    probe = joblib.load(f"{checkpoint_dir}/probe_layer_7.joblib")
+def main(
+    checkpoint_dir: Path | None = None,
+    out_dir: Path | None = None,
+    layer: int = 7,
+    n_shap: int = DEFAULT_N_EVAL,
+):
+    checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else checkpoint_path()
+    out_dir = Path(out_dir) if out_dir else output_path("7_shap_recompute")
+
+    probe = joblib.load(checkpoint_dir / f"probe_layer_{layer}.joblib")
     probe.verbose = 0
 
-    shap_eval, background, bg_idx = prepare_shap_inputs()
+    # LinearExplainer is exact and cheap, so this can afford far more rows than
+    # KernelSHAP. Rows come from the shared sampler so IG/GA in 8_feature_ranking
+    # score the same examples.
+    shap_eval, background, eval_idx, bg_idx = load_eval_and_background(
+        layer=layer, n_eval=n_shap
+    )
+    print(f"LinearSHAP on {len(shap_eval)} held-out rows / {len(background)} background")
+
     feature_indices = np.arange(shap_eval.shape[1])
     shap_values = run_linearshap(probe, shap_eval, background, feature_indices)
 
@@ -161,6 +154,7 @@ def main(checkpoint_dir: str = "checkpoints", out_dir: str = "outputs/7_shap_rec
     np.save(f"{out_dir}/top_k_idx_layer7.npy", top_k_idx)
     np.save(f"{out_dir}/top_k_Phi_layer7.npy", top_k_Phi)
     np.save(f"{out_dir}/background_indices_layer7.npy", bg_idx)
+    np.save(f"{out_dir}/eval_indices_layer7.npy", eval_idx)
     print(f"\nWrote outputs → {out_dir}/")
 
 

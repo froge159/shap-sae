@@ -1,4 +1,23 @@
+"""
+Steering / ablation faithfulness for the linear (logistic) SAE probe.
+
+Readout is the GPT-2 logit difference (" wonderful" − " awful") at the last real
+token — deliberately *not* the probe the attributions explain, so faithfulness is
+measured against the model rather than against the explainer's own target.
+
+Two mismatches to keep in mind when reading the numbers:
+  - Attributions describe the SAE activation vector at one token position;
+    `_apply_feature_intervention` edits the feature at *every* token position.
+  - `--alpha` comes from 9.5_tuning, which calibrated it against a layer-11
+    residual-probe probability, not against this logit-diff scale.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
 import os
+import sys
 from pathlib import Path
 
 import joblib
@@ -9,7 +28,24 @@ from scipy.stats import spearmanr
 from sklearn.linear_model import LogisticRegression
 from tqdm import tqdm
 from transformer_lens import HookedTransformer
-from utils import load_model, load_splits
+
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from utils import (
+    checkpoint_path,
+    eval_sentences,
+    last_real_token_index,
+    load_model,
+    output_path,
+    sample_eval_rows,
+)
+
+# Causal effects are measured on the held-out rows the attributions describe,
+# not on val. Nesting makes these the first N_STEER_EVAL rows of the set
+# 7_shap_recompute / 8_feature_ranking scored.
+N_STEER_EVAL = 1000
 
 
 def compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores):
@@ -81,16 +117,40 @@ def faithfulness_correlation(method_scores, effects, *, importance: bool):
     return rho, p
 
 
-def report_faithfulness(method_scores_by_name: dict, delta_abs: dict, delta_signed: dict):
+def orient_signed_effects(delta_signed: dict, mode: str) -> dict:
+    """
+    Put signed Δ on a scale where "faithful" always means positive ρ.
+
+    Steering adds +α, so a positive attribution predicts a positive Δ and the
+    raw effect is already correctly oriented. Ablation *removes* the feature, so
+    a positive attribution predicts a *negative* Δ — a perfectly faithful method
+    would score ρ ≈ −1 on the raw numbers. Negating here keeps the two modes
+    comparable and stops a correct result from reading as a failure.
+    """
+    if mode == "ablation":
+        return {k: -v for k, v in delta_signed.items()}
+    if mode == "steering":
+        return dict(delta_signed)
+    raise ValueError(f"Unknown mode={mode!r}; expected 'ablation' or 'steering'")
+
+
+def report_faithfulness(
+    method_scores_by_name: dict, delta_abs: dict, delta_signed: dict, mode: str
+):
     """Print importance and directional faithfulness for each ranking method."""
     print("Importance faithfulness  (Spearman ρ of |attribution| vs |Δ|):")
     for name, scores in method_scores_by_name.items():
         rho, p = faithfulness_correlation(scores, delta_abs, importance=True)
         print(f"  {name:14s}  ρ={rho:.3f}  p={p:.4f}")
 
-    print("Directional faithfulness (Spearman ρ of attribution vs signed Δ):")
+    oriented = orient_signed_effects(delta_signed, mode)
+    effect_desc = "−Δ" if mode == "ablation" else "Δ"
+    print(
+        f"Directional faithfulness (Spearman ρ of attribution vs {effect_desc}; "
+        f"positive = faithful under mode={mode}):"
+    )
     for name, scores in method_scores_by_name.items():
-        rho, p = faithfulness_correlation(scores, delta_signed, importance=False)
+        rho, p = faithfulness_correlation(scores, oriented, importance=False)
         print(f"  {name:14s}  ρ={rho:.3f}  p={p:.4f}")
 
 
@@ -101,9 +161,11 @@ def _pad_token_id(model: HookedTransformer) -> int:
     return pad_id
 
 
-def pool_last_non_pad_token(tokens: torch.Tensor, acts: torch.Tensor, pad_id: int) -> np.ndarray:
+def pool_last_non_pad_token(
+    model: HookedTransformer, tokens: torch.Tensor, acts: torch.Tensor
+) -> np.ndarray:
     """
-    Select activations at the last non-padding token (matches extract.py).
+    Select activations at the last non-padding token (matches core/1_extract.py).
 
     tokens: (batch, seq) or (seq,)
     acts:   (batch, seq, d) or (seq, d)
@@ -114,8 +176,7 @@ def pool_last_non_pad_token(tokens: torch.Tensor, acts: torch.Tensor, pad_id: in
     if acts.ndim == 2:
         acts = acts.unsqueeze(0)
 
-    mask = tokens != pad_id
-    last_idx = mask.sum(dim=1) - 1
+    last_idx = last_real_token_index(model, tokens)
     batch_idx = torch.arange(tokens.shape[0], device=tokens.device)
     pooled = acts[batch_idx, last_idx, :]
     pooled = pooled.detach().cpu().numpy()
@@ -138,7 +199,6 @@ def collect_last_token_residuals(
 ) -> np.ndarray:
     """Collect last-non-pad residual vectors at `layer`, shape (n, d_model)."""
     hook_point = f"blocks.{layer}.hook_resid_post"
-    pad_id = _pad_token_id(model)
     rows = []
 
     # tokens_list may be a padded [N, T] tensor or a list of [T] tensors
@@ -151,7 +211,7 @@ def collect_last_token_residuals(
             with torch.no_grad():
                 _, cache = model.run_with_cache(batch, names_filter=hook_point)
             resid = cache[hook_point]
-            pooled = pool_last_non_pad_token(batch, resid, pad_id)
+            pooled = pool_last_non_pad_token(model, batch, resid)
             if pooled.ndim == 1:
                 pooled = pooled[None, :]
             rows.append(pooled)
@@ -161,7 +221,7 @@ def collect_last_token_residuals(
             with torch.no_grad():
                 _, cache = model.run_with_cache(tokens, names_filter=hook_point)
             resid = cache[hook_point]
-            pooled = pool_last_non_pad_token(tokens, resid, pad_id)
+            pooled = pool_last_non_pad_token(model, tokens, resid)
             if pooled.ndim == 1:
                 pooled = pooled[None, :]
             rows.append(pooled)
@@ -174,15 +234,15 @@ def train_residual_probe(
     tokens_list,
     labels: np.ndarray,
     layer: int,
-    checkpoint_path: str | None = None,
+    ckpt_path: str | None = None,
 ) -> LogisticRegression:
     """Train a logistic probe on last-token residual stream at `layer`."""
     X = collect_last_token_residuals(model, tokens_list, layer)
     probe = LogisticRegression(max_iter=1000, C=1.0, solver="liblinear", verbose=0)
     probe.fit(X, labels)
-    if checkpoint_path is not None:
-        Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(probe, checkpoint_path)
+    if ckpt_path is not None:
+        Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(probe, ckpt_path)
     return probe
 
 
@@ -193,6 +253,7 @@ def load_or_train_residual_probe(
     layer: int,
     checkpoint_path: str,
 ) -> LogisticRegression:
+    """`checkpoint_path` here is a path string, not utils.checkpoint_path."""
     if os.path.exists(checkpoint_path):
         return joblib.load(checkpoint_path)
     print(f"Training residual probe at layer {layer} → {checkpoint_path}")
@@ -239,9 +300,9 @@ def sentiment_token_ids(
 
 
 def last_non_pad_logit_diff(
+    model: HookedTransformer,
     logits: torch.Tensor,
     tokens: torch.Tensor,
-    pad_id: int,
     pos_id: int,
     neg_id: int,
 ) -> np.ndarray:
@@ -252,8 +313,7 @@ def last_non_pad_logit_diff(
     tokens: (batch, seq)
     returns: (batch,) numpy
     """
-    mask = tokens != pad_id
-    last_idx = mask.sum(dim=1) - 1
+    last_idx = last_real_token_index(model, tokens)
     batch_idx = torch.arange(tokens.shape[0], device=tokens.device)
     last_logits = logits[batch_idx, last_idx, :]
     diffs = last_logits[:, pos_id] - last_logits[:, neg_id]
@@ -307,7 +367,6 @@ def get_model_intervention_effects(
     n = all_tokens.shape[0]
 
     intervene_point = f"blocks.{layer}.hook_resid_post"
-    pad_id = _pad_token_id(model)
     pos_id, neg_id = sentiment_token_ids(model, pos_token, neg_token)
     delta_abs: dict[int, float] = {}
     delta_signed: dict[int, float] = {}
@@ -319,7 +378,7 @@ def get_model_intervention_effects(
         with torch.no_grad():
             with model.hooks(fwd_hooks=fwd_hooks):
                 logits = model(tokens)
-            return last_non_pad_logit_diff(logits, tokens, pad_id, pos_id, neg_id)
+            return last_non_pad_logit_diff(model, logits, tokens, pos_id, neg_id)
 
     def score_all(fwd_hooks: list, desc: str) -> np.ndarray:
         chunks = []
@@ -406,25 +465,52 @@ def get_model_steering_effects(
     )
 
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--mode", choices=("steering", "ablation"), default="steering")
+    p.add_argument(
+        "--alpha",
+        type=float,
+        default=0.6723,
+        help="Signed additive steering strength: a_i <- a_i + alpha",
+    )
+    p.add_argument("--k", type=int, default=20, help="Candidate features")
+    p.add_argument(
+        "--selection",
+        choices=("top", "random"),
+        default="top",
+        help="'top' = top-k by |SHAP|; 'random' = uniform over the filtered set",
+    )
+    p.add_argument("--seed", type=int, default=0, help="Seed for --selection random")
+    p.add_argument(
+        "--n-eval",
+        type=int,
+        default=N_STEER_EVAL,
+        help="Held-out rows to score (prefix of the canonical sample)",
+    )
+    p.add_argument("--out-dir", type=Path, default=output_path("9_steer"))
+    return p.parse_args()
+
+
 if __name__ == "__main__":
-    # Flip this to switch experiments: "ablation" | "steering"
-    MODE = "steering"
-    # Signed additive steering strength: a_i ← a_i + α  (use −α to push the other way)
-    STEERING_ALPHA = 0.6723
-    K = 20
-    # Candidate selection: "top" (|SHAP|) | "random" (uniform over filtered set)
-    SELECTION = "random"
-    SEED = 0
+    args = parse_args()
+    MODE = args.mode
+    STEERING_ALPHA = args.alpha
+    K = args.k
+    SELECTION = args.selection
+    SEED = args.seed
 
     # Full-width signed attributions; candidates restricted to the SHAP-filtered
-    # feature set (outputs/3_shap); no union across methods.
-    feature_indices = np.load("outputs/3_shap/shap_feature_indices.npy")
-    sae_probe = joblib.load("checkpoints/probe_layer_7.joblib")
+    # feature set (3_shap); no union across methods.
+    feature_indices = np.load(output_path("3_shap", "shap_feature_indices.npy"))
+    sae_probe = joblib.load(checkpoint_path("probe_layer_7.joblib"))
 
     probe_scores = sae_probe.coef_[0]
-    ig_scores = np.load("outputs/8_rankings_recompute/ig_scores.npy")
-    ga_scores = np.load("outputs/8_rankings_recompute/ga_scores.npy")
-    shap_scores = np.load("outputs/7_shap_recompute/phi_sentiment_layer7_signed.npy")
+    ig_scores = np.load(output_path("8_rankings_recompute", "ig_scores.npy"))
+    ga_scores = np.load(output_path("8_rankings_recompute", "ga_scores.npy"))
+    shap_scores = np.load(
+        output_path("7_shap_recompute", "phi_sentiment_layer7_signed.npy")
+    )
 
     shap_filtered = shap_scores[feature_indices]
     local_top, global_candidates = get_shap_candidates(
@@ -440,13 +526,20 @@ if __name__ == "__main__":
     )
     print(f"  local indices:  {local_top.tolist()}")
     print(f"  global indices: {global_candidates.tolist()}")
+    if K < 30:
+        print(
+            f"  NOTE: faithfulness ρ below is computed over n={K} features across "
+            "4 methods × 2 correlation types — treat individual p-values as "
+            "descriptive, not confirmatory."
+        )
 
     model = load_model()
     sae = SAE.from_pretrained("gpt2-small-resid-post-v5-32k", "blocks.7.hook_resid_post")
     sae = sae.to(model.cfg.device)
 
-    _, val_ds, _ = load_splits()
-    val_tokens = model.to_tokens(list(val_ds["sentence"]))
+    steer_eval_idx, _ = sample_eval_rows(layer=7, n_eval=args.n_eval)
+    steer_tokens = model.to_tokens(eval_sentences(steer_eval_idx))
+    print(f"Steering eval: {len(steer_eval_idx)} held-out rows")
 
     pos_id, neg_id = sentiment_token_ids(model, POS_TOKEN, NEG_TOKEN)
     print(
@@ -457,7 +550,7 @@ if __name__ == "__main__":
     delta_abs, delta_signed = get_model_intervention_effects(
         model,
         sae,
-        val_tokens,
+        steer_tokens,
         global_candidates,
         layer=7,
         mode=MODE,
@@ -482,12 +575,28 @@ if __name__ == "__main__":
         "IG": ig_scores,
         "GA": ga_scores,
     }
-    report_faithfulness(method_scores, delta_abs, delta_signed)
+    report_faithfulness(method_scores, delta_abs, delta_signed, MODE)
 
-    out_dir = Path("outputs/9_steer_check")
+    out_dir = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    np.save(out_dir / f"model_delta_abs_{MODE}.npy", delta_abs)
-    np.save(out_dir / f"model_delta_signed_{MODE}.npy", delta_signed)
+    # JSON, not np.save: these are dict[int, float], and np.save would pickle
+    # them into a 0-d object array that only reloads with allow_pickle=True.
+    with open(out_dir / f"model_deltas_{MODE}.json", "w") as f:
+        json.dump(
+            {
+                "mode": MODE,
+                "steering_alpha": STEERING_ALPHA,
+                "selection": SELECTION,
+                "k": K,
+                "seed": SEED,
+                "n_eval": int(len(steer_eval_idx)),
+                "delta_abs": {str(k): v for k, v in delta_abs.items()},
+                "delta_signed": {str(k): v for k, v in delta_signed.items()},
+            },
+            f,
+            indent=2,
+        )
     np.save(out_dir / "shap_top_local.npy", local_top)
     np.save(out_dir / "shap_top_global.npy", global_candidates)
+    np.save(out_dir / "eval_indices.npy", steer_eval_idx)
     print(f"\nWrote outputs → {out_dir}/")

@@ -1,3 +1,14 @@
+"""
+Seed stability of KernelSHAP: rerun the same data with different explainer seeds
+and rank-correlate the resulting Φ.
+
+Scope note: this measures the *KernelSHAP* estimator from core/3_shap_comp.py,
+which explains `predict_proba[:, 1]` and aggregates |φ|. Everything downstream
+(7_shap_recompute onwards) uses exact LinearSHAP on the log-odds margin with a
+*signed* mean instead — an exact explainer with no sampling seed. So a good ρ
+here says KernelSHAP is stable; it does not certify the Φ those scripts consume.
+"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -15,6 +26,8 @@ _SRC = Path(__file__).resolve().parents[1]
 _ROOT = _SRC.parent
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
+
+from utils import checkpoint_path, load_activations, output_path
 
 
 def _load_shap_comp():
@@ -70,29 +83,33 @@ def pairwise_rank_correlations(phis: np.ndarray, feature_indices: np.ndarray):
 
 
 def main(
-    checkpoint_dir: str = "checkpoints",
+    checkpoint_dir: Path | None = None,
     layer: int = 7,
     data_seed: int = 42,
     explainer_seeds: list[int] | None = None,
     n_background: int = 100,
     n_shap: int = 500,
     n_shap_samples: int = 256,
-    out_dir: str = "outputs/6_shap_stability",
+    out_dir: Path | None = None,
 ):
     if explainer_seeds is None:
         explainer_seeds = [42, 43, 44, 45, 46]
+    checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else checkpoint_path()
+    out_dir = Path(out_dir) if out_dir else output_path("6_stability")
 
-    probe = joblib.load(f"{checkpoint_dir}/probe_layer_{layer}.joblib")
+    probe = joblib.load(checkpoint_dir / f"probe_layer_{layer}.joblib")
     probe.verbose = 0
 
     # Fixed data so seed variance is from KernelSHAP sampling only.
-    shap_eval, background, bg_idx = shap_comp.prepare_shap_inputs(
+    shap_eval, background, eval_idx, bg_idx = shap_comp.prepare_shap_inputs(
         layer=layer,
         n_background=n_background,
         n_shap=n_shap,
         seed=data_seed,
     )
-    feature_indices = shap_comp.get_shap_feature_mask(probe, shap_eval)
+    feature_indices = shap_comp.get_shap_feature_mask(
+        probe, load_activations("val", layer, mmap=True)
+    )
 
     phis = []
     for seed in explainer_seeds:
@@ -123,6 +140,7 @@ def main(
     np.save(f"{out_dir}/feature_indices.npy", feature_indices)
     np.save(f"{out_dir}/explainer_seeds.npy", np.array(explainer_seeds))
     np.save(f"{out_dir}/background_indices.npy", bg_idx)
+    np.save(f"{out_dir}/eval_indices.npy", eval_idx)
     np.save(
         f"{out_dir}/pairwise_rho.npy",
         np.array([(i, j, rho, p) for i, j, rho, p in pairs], dtype=np.float64),

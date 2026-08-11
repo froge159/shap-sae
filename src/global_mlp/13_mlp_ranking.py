@@ -1,22 +1,35 @@
 """
 Feature ranking for the filtered-feature MLP probe.
 
-Mirrors secondary/8_feature_ranking.py (signed mean IG/GA, Spearman rank
+Mirrors global_linear/8_feature_ranking.py (signed mean IG/GA, Spearman rank
 comparisons), but:
-  - Explains the saved MLP probe (checkpoints/mlp_probe_layer_*.joblib)
+  - Explains the saved MLP probe (mlp_probe_layer_*.joblib)
   - IG/GA use input-dependent gradients through ReLU (not constant ∂f/∂x = w)
   - Scores/ranks are over filtered features only; SHAP scores are Phi[indices]
+
+Note on `probe_scores`: unlike the linear arm's signed `coef_`, the MLP's
+`probe_saliency` is ‖W1[i,:]‖₂ and is therefore **non-negative**. It carries
+magnitude only, so it is reported against the other methods for importance and
+excluded from any directional comparison.
 """
 
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 
 import joblib
 import numpy as np
 from scipy.stats import spearmanr
 from sklearn.neural_network import MLPClassifier
 from tqdm import tqdm
+
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from utils import checkpoint_path, load_eval_and_background, output_path
 
 
 def mlp_prob_grad(probe: MLPClassifier, x: np.ndarray) -> np.ndarray:
@@ -94,8 +107,9 @@ def probe_saliency(probe: MLPClassifier) -> np.ndarray:
 
 
 def compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores):
+    """Scores → ranks by |score| (rank 1 = largest magnitude), for readable tables."""
     def scores_to_ranks(scores):
-        order = np.argsort(scores)[::-1]
+        order = np.argsort(np.abs(scores))[::-1]
         ranks = np.empty_like(order)
         ranks[order] = np.arange(1, len(scores) + 1)
         return ranks
@@ -109,6 +123,19 @@ def compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores):
 
 
 def compare_rankings(probe_scores, ig_scores, shap_scores, ga_scores):
+    """
+    Spearman between methods on **|score|** — an importance comparison only.
+
+    `probe_scores` is ‖W1[i,:]‖₂, which has no sign, so correlating it against
+    signed IG/GA/SHAP would be comparing a magnitude with a direction. Taking |·|
+    throughout puts all four on the one scale they share. The signed question is
+    answered against causal effects in 14_mlp_steer, not here.
+    """
+    probe_scores = np.abs(probe_scores)
+    ig_scores = np.abs(ig_scores)
+    shap_scores = np.abs(shap_scores)
+    ga_scores = np.abs(ga_scores)
+
     rho_probe_ig, p1 = spearmanr(probe_scores, ig_scores)
     rho_probe_shap, p2 = spearmanr(probe_scores, shap_scores)
     rho_ig_shap, p3 = spearmanr(ig_scores, shap_scores)
@@ -116,56 +143,94 @@ def compare_rankings(probe_scores, ig_scores, shap_scores, ga_scores):
     rho_ig_ga, p5 = spearmanr(ig_scores, ga_scores)
     rho_shap_ga, p6 = spearmanr(shap_scores, ga_scores)
 
-    print(f"Probe vs IG:   ρ={rho_probe_ig:.3f},   p={p1:.4f}")
-    print(f"Probe vs SHAP: ρ={rho_probe_shap:.3f}, p={p2:.4f}")
-    print(f"IG vs SHAP:    ρ={rho_ig_shap:.3f},    p={p3:.4f}")
-    print(f"Probe vs GA:   ρ={rho_probe_ga:.3f},   p={p4:.4f}")
-    print(f"IG vs GA:      ρ={rho_ig_ga:.3f},      p={p5:.4f}")
-    print(f"SHAP vs GA:    ρ={rho_shap_ga:.3f},    p={p6:.4f}")
+    lines = [
+        f"n_features={len(probe_scores)}  (Spearman on |score|)",
+        f"Probe vs IG:   ρ={rho_probe_ig:.3f},   p={p1:.4f}",
+        f"Probe vs SHAP: ρ={rho_probe_shap:.3f}, p={p2:.4f}",
+        f"IG vs SHAP:    ρ={rho_ig_shap:.3f},    p={p3:.4f}",
+        f"Probe vs GA:   ρ={rho_probe_ga:.3f},   p={p4:.4f}",
+        f"IG vs GA:      ρ={rho_ig_ga:.3f},      p={p5:.4f}",
+        f"SHAP vs GA:    ρ={rho_shap_ga:.3f},    p={p6:.4f}",
+    ]
+    for line in lines:
+        print(line)
+    return "\n".join(lines) + "\n"
 
 
-def feature_ranking(probe, train_activations, Phi, feature_indices):
+def feature_ranking(probe, activations, baseline, Phi, feature_indices):
     """
     IG/GA/probe on filtered activations; SHAP = Phi at filtered global indices.
+
+    `activations` and `baseline` must be the same held-out eval rows and train
+    background that produced Phi, or the Spearman comparisons below confound
+    attribution method with choice of data.
     """
-    baseline = train_activations.mean(axis=0)
-    ig_scores = integrated_gradients(probe, train_activations, baseline)
-    ga_scores = gradient_attribution(probe, train_activations, baseline)
+    ig_scores = integrated_gradients(probe, activations, baseline)
+    ga_scores = gradient_attribution(probe, activations, baseline)
     probe_scores = probe_saliency(probe)
     shap_scores = Phi[feature_indices]
     return ig_scores, ga_scores, probe_scores, shap_scores
 
 
 if __name__ == "__main__":
-    payload = joblib.load("checkpoints/mlp_probe_layer_7.joblib")
+    LAYER = 7
+    OUT_DIR = output_path("13_mlp_ranking")
+    SHAP_DIR = output_path("12_mlp_shap")
+
+    payload = joblib.load(checkpoint_path(f"mlp_probe_layer_{LAYER}.joblib"))
     probe: MLPClassifier = payload["probe"]
     feature_indices = np.asarray(payload["feature_indices"])
 
-    train_activations = np.load("activations/probe_train/layer_7/activations.npy")
-    train_activations = np.asarray(
-        train_activations[:, feature_indices], dtype=np.float32
+    # Same held-out rows DeepSHAP explained, same train background it
+    # marginalised over, both sliced to the probe's filtered inputs.
+    shap_eval, background, eval_idx, bg_idx = load_eval_and_background(layer=LAYER)
+    eval_activations = np.asarray(shap_eval[:, feature_indices], dtype=np.float32)
+    baseline = np.asarray(background[:, feature_indices], dtype=np.float32).mean(axis=0)
+    print(
+        f"IG/GA over {len(eval_activations)} held-out rows x "
+        f"{len(feature_indices)} features, baseline = mean of "
+        f"{len(background)} train background rows"
     )
 
-    Phi = np.load("outputs/12_mlp_shap/phi_sentiment_layer7_signed.npy")
-    shap_feature_indices = np.load("outputs/12_mlp_shap/shap_feature_indices.npy")
+    Phi = np.load(SHAP_DIR / "phi_sentiment_layer7_signed.npy")
+    shap_feature_indices = np.load(SHAP_DIR / "shap_feature_indices.npy")
     if not np.array_equal(feature_indices, shap_feature_indices):
         raise ValueError(
-            "Checkpoint feature_indices disagree with "
-            "outputs/12_mlp_shap/shap_feature_indices.npy"
+            f"Checkpoint feature_indices disagree with "
+            f"{SHAP_DIR / 'shap_feature_indices.npy'}"
+        )
+
+    # Φ and IG/GA must describe the *same* rows, or the Spearman comparisons below
+    # confound attribution method with choice of data. 12_mlp_shap has been run at
+    # a smaller n_shap than DEFAULT_N_EVAL before, which silently breaks this.
+    shap_eval_indices_path = SHAP_DIR / f"eval_indices_layer{LAYER}.npy"
+    if shap_eval_indices_path.exists():
+        shap_eval_idx = np.load(shap_eval_indices_path)
+        if not np.array_equal(eval_idx, shap_eval_idx):
+            raise ValueError(
+                f"Row mismatch: IG/GA scored on {len(eval_idx)} rows but "
+                f"{SHAP_DIR}/ holds SHAP for {len(shap_eval_idx)} rows. "
+                f"Re-run 12_mlp_shap with n_shap={len(eval_idx)}."
+            )
+    else:
+        print(
+            f"WARNING: {shap_eval_indices_path} missing — cannot verify that Φ and "
+            "IG/GA describe the same held-out rows. Re-run 12_mlp_shap."
         )
 
     ig_scores, ga_scores, probe_scores, shap_scores = feature_ranking(
-        probe, train_activations, Phi, feature_indices
+        probe, eval_activations, baseline, Phi, feature_indices
     )
 
-    os.makedirs("outputs/13_mlp_ranking", exist_ok=True)
-    np.save("outputs/13_mlp_ranking/ig_scores.npy", ig_scores)
-    np.save("outputs/13_mlp_ranking/ga_scores.npy", ga_scores)
-    np.save("outputs/13_mlp_ranking/probe_scores.npy", probe_scores)
-    np.save("outputs/13_mlp_ranking/shap_scores.npy", shap_scores)
-    np.save("outputs/13_mlp_ranking/feature_indices.npy", feature_indices)
+    os.makedirs(OUT_DIR, exist_ok=True)
+    np.save(OUT_DIR / "ig_scores.npy", ig_scores)
+    np.save(OUT_DIR / "ga_scores.npy", ga_scores)
+    np.save(OUT_DIR / "probe_scores.npy", probe_scores)
+    np.save(OUT_DIR / "shap_scores.npy", shap_scores)
+    np.save(OUT_DIR / "feature_indices.npy", feature_indices)
+    np.save(OUT_DIR / "eval_indices.npy", eval_idx)
+    np.save(OUT_DIR / "background_indices.npy", bg_idx)
 
-    probe_ranks, ig_ranks, ga_ranks, shap_ranks = compile_rankings(
-        ig_scores, probe_scores, ga_scores, shap_scores
-    )
-    compare_rankings(probe_ranks, ig_ranks, shap_ranks, ga_ranks)
+    text = compare_rankings(probe_scores, ig_scores, shap_scores, ga_scores)
+    (OUT_DIR / "correlation.txt").write_text(text)
+    print(f"\nWrote outputs → {OUT_DIR}/")

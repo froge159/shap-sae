@@ -1,10 +1,18 @@
-from sae_lens import SAE, HookedSAETransformer
-import torch
 import json
-from datasets import load_dataset, load_from_disk
-import numpy as np
-from tqdm import tqdm
+import sys
 from pathlib import Path
+
+import numpy as np
+import torch
+from datasets import load_from_disk
+from sae_lens import SAE
+from tqdm import tqdm
+
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from utils import last_real_token_index, load_model, load_splits
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -25,11 +33,6 @@ def main():
     )
 
 
-def load_model():
-    model = HookedSAETransformer.from_pretrained_no_processing("gpt2", device=device)
-    return model
-
-
 def load_saes():
     saes = {}
     for layer in TARGET_LAYERS:
@@ -38,18 +41,6 @@ def load_saes():
         sae.to(device)
         saes[layer] = sae
     return saes
-
-
-def load_splits():
-    ds = load_from_disk("data/sst2_train")
-    with open("data/three_way_split_indices.json") as f:
-        indices = json.load(f)
-
-    train_ds = ds.select(indices["train_indices"])
-    val_ds = ds.select(indices["val_indices"])
-    shap_ds = ds.select(indices["shap_indices"])
-
-    return train_ds, val_ds, shap_ds
 
 
 def create_splits():
@@ -106,11 +97,7 @@ def extract_split_activations(model, saes, sentences, labels, batch_size=32):
                 tokens, saes=[saes[layer] for layer in layers]
             )
 
-            pad_id = model.tokenizer.pad_token_id
-            if pad_id is None:
-                pad_id = model.tokenizer.eos_token_id
-            mask = tokens != pad_id
-            last_idx = mask.sum(dim=1) - 1  # [B]
+            last_idx = last_real_token_index(model, tokens)  # [B]
             batch_idx = torch.arange(tokens.shape[0], device=tokens.device)
 
             for layer in layers:

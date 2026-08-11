@@ -29,20 +29,7 @@ _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from datasets import load_from_disk
-
-
-def load_splits():
-    """Same three-way split as extract.py (local disk, no Hub lock)."""
-    import json
-
-    ds = load_from_disk("data/sst2_train")
-    with open("data/three_way_split_indices.json") as f:
-        indices = json.load(f)
-    train_ds = ds.select(indices["train_indices"])
-    val_ds = ds.select(indices["val_indices"])
-    shap_ds = ds.select(indices["shap_indices"])
-    return train_ds, val_ds, shap_ds
+from utils import checkpoint_path, load_splits, output_path
 
 # ---------------------------------------------------------------------------
 # Strong sentiment lexicon (movie-review / SST style). No extra downloads.
@@ -338,7 +325,12 @@ def write_summary(
     mean_abs_r = float(np.nanmean([abs(r["r_has_any"]) for r in tracking]))
     lines.append(f"   mean |r(activation, has_lexicon_word)| = {mean_abs_r:.3f}")
     lines.append("")
-    lines.append("4) Lexicon baseline vs SAE probe (SHAP held-out split)")
+    lines.append("4) Lexicon baseline vs SAE probe (full held-out split)")
+    lines.append(
+        "   NB: this probe accuracy is measured on held-out, not on val. Nothing "
+        "is fit here, but it is a second, differently-sourced number from the val "
+        "accuracy 2_probes reports — do not quote the two interchangeably."
+    )
     lines.append(
         f"   frac examples with ≥1 lexicon word = "
         f"{baseline['frac_eval_with_lexicon_word']:.3f}"
@@ -401,13 +393,22 @@ def write_summary(
 
 
 def main(
-    feature_indices_path: str = "outputs/3_shap/shap_feature_indices.npy",
-    phi_path: str = "outputs/7_shap_recompute/phi_sentiment_layer7_signed.npy",
+    feature_indices_path: Path | None = None,
+    phi_path: Path | None = None,
     activations_path: str = "activations/shap/layer_7/activations.npy",
-    probe_path: str = "checkpoints/probe_layer_7.joblib",
+    probe_path: Path | None = None,
     n_top: int = 20,
-    out_dir: str = "outputs/10_simplicity_check",
+    out_dir: Path | None = None,
 ):
+    feature_indices_path = feature_indices_path or output_path(
+        "3_shap", "shap_feature_indices.npy"
+    )
+    phi_path = phi_path or output_path(
+        "7_shap_recompute", "phi_sentiment_layer7_signed.npy"
+    )
+    probe_path = probe_path or checkpoint_path("probe_layer_7.joblib")
+    out_dir = Path(out_dir) if out_dir else output_path("10_simplicity_check")
+
     train_ds, _, shap_ds = load_splits()
     shap_sentences = list(shap_ds["sentence"])
     shap_labels = np.asarray(shap_ds["label"])
@@ -447,7 +448,7 @@ def main(
         acts,
     )
 
-    out = Path(out_dir)
+    out = out_dir
     out.mkdir(parents=True, exist_ok=True)
     np.save(out / "active_counts.npy", active["counts"])
     np.save(out / "top_features.npy", top_features)

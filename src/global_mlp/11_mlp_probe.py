@@ -9,6 +9,7 @@ input-dependent, so IG/GA no longer get a built-in advantage from constant
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import joblib
@@ -16,8 +17,14 @@ import numpy as np
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.neural_network import MLPClassifier
 
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from utils import checkpoint_path, output_path
+
 LAYERS = tuple(range(7, 8))
-FEATURE_INDICES_PATH = Path("outputs/3_shap/shap_feature_indices.npy")
+FEATURE_INDICES_PATH = output_path("3_shap", "shap_feature_indices.npy")
 # One hidden layer → two affine maps (input→hidden→logit): a small 2-layer MLP.
 HIDDEN_DIM = 32
 MAX_ITER = 500
@@ -106,9 +113,9 @@ def main():
         f"Using {len(feature_indices)} filtered features from {FEATURE_INDICES_PATH}"
     )
 
-    out_ckpt = Path("checkpoints")
+    out_ckpt = checkpoint_path()
     out_ckpt.mkdir(parents=True, exist_ok=True)
-    out_dir = Path("outputs/11_mlp_probe")
+    out_dir = output_path("11_mlp_probe")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for LAYER in LAYERS:
@@ -152,7 +159,7 @@ def main():
         print(f"  Features:         {results['n_features']}")
         print(f"  Hidden dim:       {results['hidden_dim']}")
         print(f"  Adam iterations:  {results['n_iter']}")
-        print(f"  Checkpoint:       checkpoints/mlp_probe_layer_{LAYER}.joblib")
+        print(f"  Checkpoint:       {out_ckpt / f'mlp_probe_layer_{LAYER}.joblib'}")
         print(f"  Top features →    {top_features_path}")
         print("  Top 20 inputs by ||W1[i,:]||₂ (global SAE index):")
         for rank, feat in enumerate(results["top_features"], start=1):

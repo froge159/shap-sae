@@ -29,17 +29,33 @@ from sae_lens import SAE
 from tqdm import tqdm
 from transformer_lens import HookedTransformer
 
-_SRC = Path(__file__).resolve().parent
+_SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from utils import load_model, load_splits
+from utils import (
+    checkpoint_path,
+    eval_sentences,
+    last_real_token_index,
+    load_model,
+    output_path,
+    sample_eval_rows,
+)
+
+# Match 9_steer / 14_mlp_steer: causal effects on the held-out rows the
+# attributions describe, not on val.
+N_STEER_EVAL = 1000
 
 N_TOTAL_FEATURES = 32768
 CONFIG_PATH = Path("steering_config.json")
-OUT_PATH = Path("outputs/group_steering_results.json")
+OUT_PATH = output_path("group_steering", "group_steering_results.json")
 METHODS = ("shap", "probe", "ig", "ga", "actdiff")
 K_SUMMARY = 20
+# Every method in every arm ranks over this same pool. Without it the logistic
+# scores (full width) would draw top-k from all 32768 features while the MLP
+# scores (zero outside the mask) could only draw from the filtered set, so the
+# two arms would not be comparable at equal k.
+FEATURE_POOL_PATH = output_path("3_shap", "shap_feature_indices.npy")
 
 
 def load_config(path: Path = CONFIG_PATH) -> dict:
@@ -77,25 +93,38 @@ def expand_to_full(
 
 def load_logistic_scores() -> dict[str, np.ndarray]:
     """Full-width signed attributions for the logistic SAE probe."""
-    probe = joblib.load("checkpoints/probe_layer_7.joblib")
+    probe = joblib.load(checkpoint_path("probe_layer_7.joblib"))
     return {
-        "shap": np.load("outputs/7_shap_recompute/phi_sentiment_layer7_signed.npy").astype(
+        "shap": np.load(
+            output_path("7_shap_recompute", "phi_sentiment_layer7_signed.npy")
+        ).astype(np.float64),
+        "probe": np.asarray(probe.coef_[0], dtype=np.float64),
+        "ig": np.load(output_path("8_rankings_recompute", "ig_scores.npy")).astype(
             np.float64
         ),
-        "probe": np.asarray(probe.coef_[0], dtype=np.float64),
-        "ig": np.load("outputs/8_rankings_recompute/ig_scores.npy").astype(np.float64),
-        "ga": np.load("outputs/8_rankings_recompute/ga_scores.npy").astype(np.float64),
+        "ga": np.load(output_path("8_rankings_recompute", "ga_scores.npy")).astype(
+            np.float64
+        ),
     }
 
 
 def load_mlp_scores() -> dict[str, np.ndarray]:
     """Full-width attributions (zeros outside the filtered MLP feature set)."""
-    ranking_dir = Path("outputs/13_mlp_ranking")
+    ranking_dir = output_path("13_mlp_ranking")
     feature_indices = np.load(ranking_dir / "feature_indices.npy")
     return {
         name: expand_to_full(np.load(ranking_dir / f"{name}_scores.npy"), feature_indices)
         for name in ("shap", "probe", "ig", "ga")
     }
+
+
+def restrict_to_pool(
+    scores: np.ndarray, feature_pool: np.ndarray, n_total: int = N_TOTAL_FEATURES
+) -> np.ndarray:
+    """Zero every feature outside `feature_pool` so top-k ranks over one pool."""
+    restricted = np.zeros(n_total, dtype=np.float64)
+    restricted[feature_pool] = np.asarray(scores, dtype=np.float64)[feature_pool]
+    return restricted
 
 
 def activation_differences(
@@ -187,14 +216,13 @@ def build_all_steering_vectors(
 
 
 def last_non_pad_logit_diff(
+    model: HookedTransformer,
     logits: torch.Tensor,
     tokens: torch.Tensor,
-    pad_id: int,
     pos_id: int,
     neg_id: int,
 ) -> torch.Tensor:
-    mask = tokens != pad_id
-    last_idx = mask.sum(dim=1) - 1
+    last_idx = last_real_token_index(model, tokens)
     batch_idx = torch.arange(tokens.shape[0], device=tokens.device)
     last_logits = logits[batch_idx, last_idx, :]
     return last_logits[:, pos_id] - last_logits[:, neg_id]
@@ -217,7 +245,11 @@ def per_example_perplexity(
     # Ignore positions whose *target* is padding.
     mask = targets != pad_id
     # Also ignore positions whose source token is padding (no real context).
+    # Position 0 is the prepended BOS, which shares the pad id but IS real
+    # context, so keep it — dropping it would throw away the first real token's
+    # NLL from every example.
     src_ok = tokens[:, :-1] != pad_id
+    src_ok[:, 0] = True
     mask = mask & src_ok
     denom = mask.sum(dim=1).clamp(min=1).to(nll.dtype)
     mean_nll = (nll * mask).sum(dim=1) / denom
@@ -251,7 +283,7 @@ def score_batches(
             else:
                 logits = model(batch)
             diffs.append(
-                last_non_pad_logit_diff(logits, batch, pad_id, pos_id, neg_id)
+                last_non_pad_logit_diff(model, logits, batch, pos_id, neg_id)
                 .float()
                 .cpu()
                 .numpy()
@@ -332,7 +364,7 @@ def score_conditions(
                 with model.hooks(fwd_hooks=[(point, hook)]):
                     logits = model(expanded)
                 diffs = last_non_pad_logit_diff(
-                    logits, expanded, pad_id, pos_id, neg_id
+                    model, logits, expanded, pos_id, neg_id
                 ).float().cpu().numpy()
                 ppls = (
                     per_example_perplexity(logits, expanded, pad_id)
@@ -398,6 +430,17 @@ def main() -> None:
     # Peak batch size ≈ batch_size * condition_batch_size.
     condition_batch_size = int(cfg.get("condition_batch_size", 8))
 
+    feature_pool = np.load(FEATURE_POOL_PATH)
+    oversized = [k for k in ks if k > len(feature_pool)]
+    if oversized:
+        print(
+            f"Dropping k={oversized}: larger than the shared feature pool "
+            f"({len(feature_pool)} features from {FEATURE_POOL_PATH})"
+        )
+        ks = [k for k in ks if k <= len(feature_pool)]
+    if not ks:
+        raise ValueError(f"No usable k <= {len(feature_pool)} in config")
+
     print("Loading attribution scores…")
     score_sets = {
         "logistic": load_logistic_scores(),
@@ -413,20 +456,27 @@ def main() -> None:
     sae = sae.to(model.cfg.device)
     W_dec = sae.W_dec.detach().float().cpu().numpy()
 
-    _, val_ds, _ = load_splits()
-    val_tokens = model.to_tokens(list(val_ds["sentence"]))
+    steer_eval_idx, _ = sample_eval_rows(layer=layer, n_eval=N_STEER_EVAL)
+    steer_tokens = model.to_tokens(eval_sentences(steer_eval_idx))
     pad_id = _pad_token_id(model)
     pos_id, neg_id = sentiment_token_ids(model, pos_token, neg_token)
     print(
         f"Readout: {pos_token!r}({pos_id}) − {neg_token!r}({neg_id}); "
-        f"n_val={val_tokens.shape[0]}, layer={layer}; "
+        f"n_eval={steer_tokens.shape[0]} held-out rows, layer={layer}; "
         f"batch_size={batch_size}, condition_batch_size={condition_batch_size}"
     )
 
-    print("Building steering vectors…")
+    print(
+        f"Building steering vectors over a shared pool of {len(feature_pool)} "
+        "features (every method and both arms rank the same candidates)…"
+    )
     all_vectors: dict[tuple[str, str, int], np.ndarray] = {}
     for probe_type, scores in score_sets.items():
         scores_with_baseline = {**scores, "actdiff": actdiff}
+        scores_with_baseline = {
+            name: restrict_to_pool(s, feature_pool)
+            for name, s in scores_with_baseline.items()
+        }
         vecs = build_all_steering_vectors(W_dec, scores_with_baseline, ks)
         for (method, k), v in vecs.items():
             all_vectors[(probe_type, method, k)] = v
@@ -438,7 +488,7 @@ def main() -> None:
     print("Computing clean baseline…")
     base_diffs, base_ppls = score_batches(
         model,
-        val_tokens,
+        steer_tokens,
         pos_id,
         neg_id,
         pad_id,
@@ -462,7 +512,7 @@ def main() -> None:
     )
     results = score_conditions(
         model,
-        val_tokens,
+        steer_tokens,
         conditions,
         base_diffs,
         base_ppls,

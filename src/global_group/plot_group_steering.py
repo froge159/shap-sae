@@ -7,27 +7,34 @@ cost (Δ PPL) on x, effect (Δ logit-diff) on y.
 Examples
 --------
   # default: logistic · k=20 → outputs/group_steering/effect_vs_cost_logistic_k20.png
-  uv run python src/extra/plot_group_steering.py
+  uv run python src/global_group/plot_group_steering.py
 
   # single panel
-  uv run python src/extra/plot_group_steering.py --probe mlp --k 5
+  uv run python src/global_group/plot_group_steering.py --probe mlp --k 5
 
   # all (probe × k) panels + a k=20 comparison pair
-  uv run python src/extra/plot_group_steering.py --all
+  uv run python src/global_group/plot_group_steering.py --all
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-RESULTS_PATH = Path("outputs/group_steering_results.json")
-OUT_DIR = Path("outputs/group_steering")
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from utils import output_path
+
+RESULTS_PATH = output_path("group_steering", "group_steering_results.json")
+OUT_DIR = output_path("group_steering")
 
 METHODS = ("shap", "probe", "ig", "ga", "actdiff")
 METHOD_LABELS = {

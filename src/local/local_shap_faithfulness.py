@@ -10,7 +10,10 @@ Method (plain language)
 -----------------------
 1. Sample N sentences from the SHAP held-out split (filtered SAE features only).
 2. Run DeepSHAP on the MLP probe → one attribution vector φ(x) per sentence.
-3. Global ranking Φ = mean_x φ(x) (same aggregation used elsewhere).
+3. Global ranking Φ: loaded from 12_mlp_shap, which computed it over the full
+   canonical eval sample. Deriving Φ from the N sentences under test instead
+   would make the "global" arm in-sample and no longer the Φ any other script
+   uses; pass --insample-phi only if you specifically want that comparison.
 4. For each sentence x, build a candidate feature set = top-k by |φ(x)| ∪ top-k
    by |Φ|.
 5. For each candidate feature i on that sentence only:
@@ -22,14 +25,24 @@ Method (plain language)
 6. Per sentence, Spearman-correlate |φ(x)| vs |Δ(x,·)| and |Φ| vs |Δ(x,·)|.
 7. Summarize mean ρ_local vs mean ρ_global across sentences.
 
-Why not reuse outputs/14_mlp_steer?
-----------------------------------
-Those files store one mean Δ per feature over the whole val set. Local SHAP
-needs Δ(x, i) for the same x that φ(x) was computed on.
+Why not reuse 14_mlp_steer?
+---------------------------
+Those files store one mean Δ per feature over the whole held-out steer sample.
+Local SHAP needs Δ(x, i) for the same x that φ(x) was computed on.
+
+Confound to keep in mind
+------------------------
+Globally-top features are usually *inactive* in any one sentence, and ablating an
+inactive feature moves the logit by exactly 0. Local |φ(x)| tracks activity by
+construction; global |Φ| does not. So some of any "local wins" margin is really
+"local knows which features fire here". 9_local_steer / 14_local_mlp_steer report
+an activity-matched control block for this; treat the headline here as an upper
+bound on the local advantage.
 """
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import sys
@@ -48,21 +61,26 @@ _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from utils import load_model, load_splits
+from utils import (
+    checkpoint_path,
+    eval_sentences,
+    load_eval_and_background,
+    load_model,
+    output_path,
+)
 
-# --- reuse DeepSHAP helpers from tertiary/12_mlp_shap.py ---
-_SHAP12 = Path(__file__).resolve().parents[1] / "tertiary" / "12_mlp_shap.py"
-_spec = importlib.util.spec_from_file_location("mlp_shap12", _SHAP12)
-assert _spec is not None and _spec.loader is not None
-_mlp_shap = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mlp_shap)
 
-# --- reuse LM intervention helpers from tertiary/14_mlp_steer.py ---
-_STEER14 = Path(__file__).resolve().parents[1] / "tertiary" / "14_mlp_steer.py"
-_spec14 = importlib.util.spec_from_file_location("mlp_steer14", _STEER14)
-assert _spec14 is not None and _spec14.loader is not None
-_steer14 = importlib.util.module_from_spec(_spec14)
-_spec14.loader.exec_module(_steer14)
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# Reuse DeepSHAP and LM-intervention helpers from the global MLP arm.
+_mlp_shap = _load("mlp_shap12", _SRC / "global_mlp" / "12_mlp_shap.py")
+_steer14 = _load("mlp_steer14", _SRC / "global_mlp" / "14_mlp_steer.py")
 
 
 LAYER = 7
@@ -73,8 +91,9 @@ K_GLOBAL = 10
 SEED = 42
 # "probe": ablate in MLP input (matches DeepSHAP's f). "lm": SAE edit + logit-diff.
 TARGET = "lm"
-CHECKPOINT = "checkpoints/mlp_probe_layer_7.joblib"
-OUT_DIR = Path("outputs/local_shap_faithfulness")
+CHECKPOINT = checkpoint_path("mlp_probe_layer_7.joblib")
+MLP_SHAP_DIR = output_path("12_mlp_shap")
+OUT_DIR = output_path("local_shap_faithfulness")
 
 
 def probe_logit(probe: MLPClassifier, x_filtered: np.ndarray) -> float:
@@ -129,7 +148,6 @@ def per_example_lm_ablation_deltas(
     example only (no dataset average).
     """
     intervene_point = f"blocks.{layer}.hook_resid_post"
-    pad_id = _steer14._pad_token_id(model)
     pos_id, neg_id = _steer14.sentiment_token_ids(model)
     batch = tokens.unsqueeze(0).to(model.cfg.device) if tokens.ndim == 1 else tokens.to(
         model.cfg.device
@@ -142,7 +160,7 @@ def per_example_lm_ablation_deltas(
         with model.hooks(fwd_hooks=[(intervene_point, recon_hook)]):
             logits = model(batch)
         base = float(
-            _steer14.last_non_pad_logit_diff(logits, batch, pad_id, pos_id, neg_id)[0]
+            _steer14.last_non_pad_logit_diff(model, logits, batch, pos_id, neg_id)[0]
         )
 
     deltas = np.zeros(len(candidate_global_idx), dtype=np.float64)
@@ -158,7 +176,7 @@ def per_example_lm_ablation_deltas(
             with model.hooks(fwd_hooks=[(intervene_point, ablation_hook)]):
                 logits = model(batch)
             steered = float(
-                _steer14.last_non_pad_logit_diff(logits, batch, pad_id, pos_id, neg_id)[0]
+                _steer14.last_non_pad_logit_diff(model, logits, batch, pos_id, neg_id)[0]
             )
         deltas[j] = steered - base
     return deltas
@@ -185,14 +203,33 @@ def spearman_abs(scores: np.ndarray, deltas: np.ndarray) -> tuple[float, float]:
     return float(rho), float(p)
 
 
+def load_global_phi(feature_indices: np.ndarray) -> np.ndarray:
+    """
+    Φ on the filtered axis, from 12_mlp_shap's full-sample DeepSHAP run.
+
+    Kept separate from the local φ's on purpose: averaging the N sentences under
+    test would make the "global" arm in-sample, and would not be the Φ the rest
+    of the pipeline ranks with.
+    """
+    phi_full = np.load(MLP_SHAP_DIR / "phi_sentiment_layer7_signed.npy")
+    shap_feature_indices = np.load(MLP_SHAP_DIR / "shap_feature_indices.npy")
+    if not np.array_equal(feature_indices, shap_feature_indices):
+        raise ValueError(
+            f"Checkpoint feature_indices disagree with "
+            f"{MLP_SHAP_DIR / 'shap_feature_indices.npy'}"
+        )
+    return np.asarray(phi_full[feature_indices], dtype=np.float64)
+
+
 def main(
     n_examples: int = N_EXAMPLES,
     k_local: int = K_LOCAL,
     k_global: int = K_GLOBAL,
     target: str = TARGET,
     seed: int = SEED,
-    checkpoint: str = CHECKPOINT,
+    checkpoint: Path = CHECKPOINT,
     out_dir: Path = OUT_DIR,
+    insample_phi: bool = False,
 ) -> None:
     if target not in ("probe", "lm"):
         raise ValueError(f"target must be 'probe' or 'lm', got {target!r}")
@@ -206,21 +243,22 @@ def main(
         f"target={target}, n_examples={n_examples}"
     )
 
-    # Sample N SHAP-split rows + train background for DeepSHAP (reproducible).
-    rng = np.random.default_rng(seed)
-    shap_acts = np.load(f"activations/shap/layer_{LAYER}/activations.npy")
-    train_acts = np.load(f"activations/probe_train/layer_{LAYER}/activations.npy")
-    pick = rng.choice(len(shap_acts), size=n_examples, replace=False)
-    bg_idx = rng.choice(len(train_acts), size=N_BACKGROUND, replace=False)
-    shap_eval = shap_acts[pick]
-    background = train_acts[bg_idx]
+    # Shared sampler => an ordered prefix of the rows the global scripts explain.
+    shap_eval, background, pick, bg_idx = load_eval_and_background(
+        layer=LAYER, n_eval=n_examples, n_background=N_BACKGROUND, seed=seed
+    )
 
     print("Computing local DeepSHAP…")
     local_shap = _mlp_shap.run_deepshap(probe, shap_eval, background, feature_indices)
     # (n_examples, n_filt)
     print(f"  local_shap shape={local_shap.shape}")
 
-    global_phi_filt = local_shap.mean(axis=0)  # mean signed SHAP on this sample
+    if insample_phi:
+        print("Global Φ: mean of these N local φ (IN-SAMPLE — diagnostic only)")
+        global_phi_filt = local_shap.mean(axis=0)
+    else:
+        global_phi_filt = load_global_phi(feature_indices)
+        print(f"Global Φ: loaded from {MLP_SHAP_DIR}/ (full canonical eval sample)")
     X_filt = np.asarray(shap_eval[:, feature_indices], dtype=np.float64)
 
     model = None
@@ -233,9 +271,8 @@ def main(
             "gpt2-small-resid-post-v5-32k", "blocks.7.hook_resid_post"
         )
         sae = sae.to(model.cfg.device)
-        _, _, shap_ds = load_splits()
         # Align tokens with the activation rows we picked from the SHAP split.
-        sentences = [shap_ds[int(i)]["sentence"] for i in pick]
+        sentences = eval_sentences(pick)
         tokens = model.to_tokens(sentences)
 
     rho_local_list = []
@@ -288,6 +325,7 @@ def main(
 
     summary = {
         "target": target,
+        "global_phi_source": "in-sample mean" if insample_phi else str(MLP_SHAP_DIR),
         "n_examples": n_examples,
         "k_local": k_local,
         "k_global": k_global,
@@ -341,5 +379,28 @@ def main(
     print(f"Wrote → {out_dir}/")
 
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--n-examples", type=int, default=N_EXAMPLES)
+    p.add_argument("--k-local", type=int, default=K_LOCAL)
+    p.add_argument("--k-global", type=int, default=K_GLOBAL)
+    p.add_argument("--target", choices=("probe", "lm"), default=TARGET)
+    p.add_argument("--out-dir", type=Path, default=OUT_DIR)
+    p.add_argument(
+        "--insample-phi",
+        action="store_true",
+        help="Use mean of these N local φ as the global Φ (in-sample; diagnostic)",
+    )
+    return p.parse_args()
+
+
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(
+        n_examples=args.n_examples,
+        k_local=args.k_local,
+        k_global=args.k_global,
+        target=args.target,
+        out_dir=args.out_dir,
+        insample_phi=args.insample_phi,
+    )

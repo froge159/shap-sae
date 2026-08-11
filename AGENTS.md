@@ -8,27 +8,56 @@ This project uses SHAP to interpret Sparse Autoencoder (SAE) features in GPT-2 S
 
 ```
 shap-sae/
-├── data/
-│   └── sentiment/          # raw + processed SST-2 dataset
+├── data/                   # SST-2 dataset + three_way_split_indices.json
 ├── activations/            # saved SAE activation tensors (not in git)
-├── checkpoints/            # probe weights, SAE fine-tune checkpoints
+├── checkpoints/            # probe weights
 ├── outputs/                # SHAP matrices, results, figures
 ├── notebooks/              # exploration and figure generation only
 └── src/
-    ├── extract.py          # activation extraction pipeline
-    ├── probes.py           # probe training and evaluation
-    ├── shap_pipeline.py    # KernelSHAP + DeepSHAP computation
-    ├── validate.py         # ablation + steering experiments
-    ├── benchmark.py        # comparative attribution methods
-    └── utils.py            # shared helpers
+    ├── utils.py                    # shared helpers: splits, sampling, paths
+    ├── core/
+    │   ├── 1_extract.py            # activation extraction pipeline
+    │   ├── 2_probes.py             # L1 logistic probe
+    │   └── 3_shap_comp.py          # KernelSHAP + the feature mask
+    ├── global_linear/              # the logistic-probe arm
+    │   ├── 6_shap_stability.py     # KernelSHAP seed stability
+    │   ├── 7_shap_recompute.py     # exact LinearSHAP, signed Phi
+    │   ├── 8_feature_ranking.py    # IG / GA / probe / SHAP rank agreement
+    │   ├── 9.5_tuning.py           # steering alpha calibration
+    │   ├── 9_steer.py              # steering / ablation faithfulness
+    │   └── 10_simplicity_check.py  # is SST-2 just a lexicon?
+    ├── global_mlp/                 # the MLP-probe arm (11-14, mirrors the above)
+    ├── local/                      # per-example faithfulness (9, 14, and the
+    │                               #   local_shap_faithfulness diagnostic)
+    └── global_group/               # multi-feature steering vectors + plots
 ```
+
+Scripts are run from the repo root and resolve data paths relative to it:
+
+```bash
+uv run python src/core/1_extract.py
+```
+
+**Artifact roots are configurable.** `outputs/` and `checkpoints/` are never
+hardcoded — every script goes through `utils.output_path()` /
+`utils.checkpoint_path()`, which read `SHAP_SAE_OUTPUTS` and
+`SHAP_SAE_CHECKPOINTS` (defaults `outputs`, `checkpoints`). To run a variant
+without clobbering a previous run:
+
+```bash
+SHAP_SAE_OUTPUTS=runs/exp3 uv run python src/global_mlp/14_mlp_steer.py
+```
+
+Do not reintroduce a literal `"outputs/..."` or `"checkpoints/..."` string; the
+env override is resolved at import, so module-level `OUT_DIR = output_path(...)`
+constants pick it up.
 
 ---
 
 ## Stack
 
 - **Model:** GPT-2 Small via `transformer_lens`
-- **SAE:** `gpt2-small-res-jb` from `sae_lens`, `resid_post` hook points, layers 8-10, 32k features
+- **SAE:** `gpt2-small-resid-post-v5-32k` from `sae_lens`, `resid_post` hook points, 32k features
 - **Dataset:** SST-2 binary sentiment (HuggingFace `stanfordnlp/sst2`)
 - **Probing:** scikit-learn `LogisticRegression`, L1 penalty, `saga` solver
 - **SHAP:** `shap` library, KernelSHAP primary, DeepSHAP for validation
@@ -46,8 +75,8 @@ curl -Lsf https://astral.sh/uv/install.sh | sh
 # install dependencies
 uv sync
 
-# run a script
-uv run python src/extract.py
+# run a script (always from the repo root)
+uv run python src/core/1_extract.py
 ```
 
 Do not use `pip install` directly. If a new dependency is needed, add it with:
@@ -61,28 +90,145 @@ uv add <package>
 
 **Activations are never stored in git.** They are large (5-8 GB) and regenerable. The `activations/` directory is in `.gitignore`. To regenerate:
 ```bash
-uv run python src/extract.py
+uv run python src/core/1_extract.py
 ```
 
-**Token position:** Use the last token position for sentence-level activation extraction. Do not change this without explicit instruction.
+**Token position:** Use the last token position for sentence-level activation
+extraction. Do not change this without explicit instruction.
 
-**SAE hook points:** Always use `resid_post` not `resid_pre` or `resid_mid`. Hook into layers 8, 9, and 10 only.
+Get that index from `utils.last_real_token_index` — never hand-roll
+`(tokens != pad_id).sum(dim=1) - 1`. GPT-2 has no dedicated pad token, so
+`transformer_lens` sets pad = bos = eos = `<|endoftext|>`; that expression counts
+the prepended BOS as padding and silently lands one position early (on the
+*second*-to-last real token, or on BOS itself for a one-token sentence). The
+helper delegates to `transformer_lens`'s own `get_attention_mask`, which resolves
+the ambiguity. This affects extraction and every readout, so all of them must use
+the one helper or they will disagree about which token they describe.
+
+**SAE hook points:** Always use `resid_post` not `resid_pre` or `resid_mid`. The
+pipeline currently runs on **layer 7** only — `TARGET_LAYERS` in `1_extract.py`
+and `LAYERS` in the probe scripts.
 
 **Splits:** SST-2 is divided into three fixed splits with a set random seed:
-- Probe train (70%)
-- Probe val (15%)
-- SHAP held-out (15%) — do not use this for anything except SHAP computation
+- Probe train (70%, 47,144)
+- Probe val (15%, 10,102)
+- Held-out (15%, 10,103)
 
-**Probe regularization:** L1 penalty with `saga` solver. Default `C=1.0`, tuned across `[0.01, 0.1, 1.0, 10.0]` on the val split.
+Each split has exactly one job. Keep to this — mixing them silently confounds
+every attribution comparison in the repo:
+
+| Split | Used for | Never used for |
+|---|---|---|
+| train | fitting probes, SHAP background, IG/GA baseline point, steering α tuning | reporting any result |
+| val | probe hyperparameters, the activation-frequency feature mask, reported probe accuracy | attribution, steering, ablation |
+| held-out | **all** attribution (SHAP/IG/GA) **and all** causal evaluation (ablation/steering) | fitting or tuning anything |
+
+Attribution and causal evaluation deliberately share the *same rows*: nothing is
+fit on them, and "did steering example i move the logit the way SHAP said it
+would for example i" is only meaningful on the same examples.
+
+**Row sampling:** never draw eval or background rows ad hoc. Call
+`utils.sample_eval_rows` / `utils.load_eval_and_background`, which are the single
+definition of which rows get explained and steered. They return permutation
+prefixes, so a 100-row local sample is an ordered prefix of the 2000-row global
+sample and results join by position. Pair sentences to activation rows with
+`utils.eval_sentences`, never by indexing a split dataset directly.
+
+**Feature mask:** `core/3_shap_comp.get_shap_feature_mask` is the only definition
+of the filtered feature set, and its frequency filter runs on **val**. It gates
+the MLP probe's input layer and the steering candidate pool, so deriving it from
+held-out data would let the eval split shape the models it later scores. A 500-row
+estimate of that 5% threshold is badly unstable (mask size ranges 68–81 across
+samples); on the full val split with the committed probe it is **75**.
+
+**Probe regularization:** L1 with `solver="liblinear"`, `C=1`, currently untuned.
+Select L1 via `l1_ratio=1`, **not** `penalty="l1"` — scikit-learn deprecated
+`penalty` in 1.8 and warns about inconsistent values if both are given. The
+sparsity is load-bearing: the mask is `(coef != 0) & frequent_enough`, so an L2
+fit (~12k non-zero vs ~1.4k) quietly turns the sparsity filter into a no-op.
+
+**Attribution targets differ by script — magnitudes are not interchangeable:**
+
+| Script | Explainer | Target function | Aggregation |
+|---|---|---|---|
+| `core/3_shap_comp` | KernelSHAP | `predict_proba[:,1]` | mean \|φ\| |
+| `global_linear/7_shap_recompute` | LinearSHAP (exact) | log-odds margin | mean signed φ |
+| `global_mlp/12_mlp_shap` | DeepSHAP | pre-sigmoid logit | mean signed φ |
+
+Rank correlations survive the monotone links between these; effect sizes do not.
+`6_shap_stability` measures the KernelSHAP variant only — it does not certify the
+Φ that 8/9/10/group_steering actually consume. `7_shap_recompute` deliberately
+explains all 32768 features rather than the mask (exact and cheap, so no reason
+to filter); consumers needing the filtered pool slice it themselves.
+
+**Steering vs ablation sign convention:** steering adds `+α`, so a positive
+attribution predicts a positive Δ. Ablation *removes* the feature, so a positive
+attribution predicts a *negative* Δ — a perfectly faithful method scores ρ ≈ −1 on
+raw numbers. Every directional report passes Δ through `orient_signed_effects`
+first, so **positive always means faithful**. Do not compare a directional ρ
+across modes without checking it was oriented.
+
+**Magnitude-only scores:** the MLP arm's `probe_saliency` is ‖W1[i,:]‖₂ and has no
+sign. It appears in importance tables only; correlating it against a signed Δ, or
+against signed IG/GA/SHAP, compares a magnitude with a direction.
 
 ---
 
 
 ## What Not to Do
 
-- Do not modify `data/sentiment/` splits or re-download the dataset with a different seed
-- Do not run SHAP on the probe val split — only on the SHAP held-out split
-- Do not store activations in float64 — use float16 to keep file sizes manageable
+- Do not modify `data/sst2_train` or `data/three_way_split_indices.json`, and do not
+  re-download the dataset with a different seed
+- Do not run SHAP on the probe val split — only on the held-out split
+- Do not fit, tune, or select anything on the held-out split (steering α included)
+- Do not load splits from the Hub — use `utils.load_splits`, which reads from disk;
+  activations were extracted in that row order and a Hub reorder would silently
+  decouple sentences from their activations
+- Do not compare attribution methods scored on different rows or with different
+  baselines — IG/GA must use the same eval rows and the same background mean as SHAP.
+  Each output dir carries an `eval_indices.npy` for exactly this check; scripts that
+  combine two artifacts assert the indices match
+- Do not rank-correlate attribution methods over the full 32768 features. The L1
+  probe zeroes ~77% of them and IG/GA/Φ are *identically* zero there, so Spearman
+  reports agreement about exclusion, not about importance (it inflated Probe-vs-GA
+  to 0.997, and made an IG-vs-SHAP ρ of 0.018 look significant). Restrict to the
+  non-zero support — `8_feature_ranking.scored_support`
+- Do not read "local SHAP beats global Φ" from the local scripts without the
+  activity control. Globally-top features are usually inactive in any one sentence
+  and ablating an inactive feature gives Δ = 0 exactly, while local |φ(x)| tracks
+  activity by construction. Block [B] of those summaries rescores on active
+  candidates only; a local win has to survive there to be about ranking
+- Do not store activations in float64 — float32 is what `1_extract.py` writes and
+  what every loader expects
 - Do not add new dependencies without checking with the user first
 - Do not write exploration code into `src/` — that belongs in `notebooks/`
 - Do not use `pip` — use `uv`
+
+---
+
+## Known caveats when reading results
+
+Real limits of the current design. State them alongside any number you quote;
+they are not bugs to fix silently.
+
+- **The committed `outputs/` predate the current scripts.** No directory contains
+  the `eval_indices.npy` that 3/6/7/8/12/13 now write, and the saved
+  `shap_values_raw.npy` files are 500 rows while the IG/GA arrays beside them are
+  2000. Treat the checked-in numbers as illustrative until the chain is re-run.
+- **α is calibrated against a different readout than it is used with.**
+  `9.5_tuning` picks α from a layer-11 residual probe's P(positive); the steer
+  scripts read out a GPT-2 logit difference. α is a rough "measurable but
+  unsaturated" magnitude, not a tuned hyperparameter.
+- **Attribution is last-token; intervention is all-token.** Attributions describe
+  the SAE vector at one position, but `_apply_feature_intervention` edits the
+  feature at every position. Some of any faithfulness gap is this mismatch.
+- **The faithfulness ρ are small-n.** Default `--k 20` means 20 features across
+  4 methods × 2 correlation types, with no multiple-comparison control. Individual
+  p-values are descriptive.
+- **Match the arms before comparing them.** `--mode`, `--selection`, `--k`,
+  `--alpha` and `--n-eval` are CLI flags on the steer scripts precisely so the
+  linear and MLP arms can be run identically; they used to be module constants
+  that had drifted apart (global on `steering`/`random`, local on `ablation`).
+- **The last-token fix invalidates cached artifacts.** Anything under
+  `activations/` produced before it describes the second-to-last token. Re-run
+  `1_extract.py` and the full chain before quoting new numbers.

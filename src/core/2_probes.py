@@ -1,10 +1,17 @@
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 import joblib
+
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from utils import checkpoint_path, output_path
 
 LAYERS = tuple(range(7, 8))  # manually adjust
 
@@ -17,6 +24,20 @@ def load_layer_activations(split_dir: Path, layer: int) -> tuple[np.ndarray, np.
 
 
 def train_probe(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
+    """
+    L1 logistic probe on full-width SAE activations.
+
+    `l1_ratio=1` is the L1 selector, and it is load-bearing rather than cosmetic:
+    `3_shap_comp.get_shap_feature_mask` is `(coef != 0) & frequent_enough`, so
+    under L2 almost nothing is exactly zero (~12k non-zero vs ~1.4k on the same
+    rows), the sparsity filter degenerates towards a no-op, and the filtered
+    feature set — which gates the MLP probe's inputs and the steering candidate
+    pool — grows without anything erroring.
+
+    Do not "modernise" this to `penalty="l1"`: sklearn deprecated `penalty` in
+    1.8 in favour of `l1_ratio`, and passing both warns about inconsistent values
+    (`penalty=l1 with l1_ratio=0.0`). This project pins scikit-learn>=1.9.
+    """
     probe = LogisticRegression(
         max_iter=1000,
         C=1,
@@ -63,17 +84,20 @@ def main():
         results = evaluate_probe(probe, X_val, y_val, LAYER)
 
 
-        # save probe as joblib file
-        out_dir = Path("checkpoints")
-        joblib.dump(probe, out_dir / f"probe_layer_{LAYER}.joblib")
-        
+        ckpt_dir = checkpoint_path()
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        joblib.dump(probe, ckpt_dir / f"probe_layer_{LAYER}.joblib")
 
-        out_dir = Path("outputs") / f"layer_{LAYER}"
+        out_dir = output_path("2_probes")
         out_dir.mkdir(parents=True, exist_ok=True)
-        top_features_path = out_dir / "top_features.json"
+        top_features_path = out_dir / f"top_features_layer_{LAYER}.json"
 
         with open(top_features_path, "w") as f:
             json.dump(results["top_features"], f, indent=2)
+        with open(out_dir / f"results_layer_{LAYER}.json", "w") as f:
+            json.dump(
+                {k: v for k, v in results.items() if k != "top_features"}, f, indent=2
+            )
 
         print(f"Layer {LAYER} probe results")
         print(f"  Val accuracy:        {results['accuracy']:.4f}")

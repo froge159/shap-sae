@@ -33,7 +33,14 @@ _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from utils import load_model, load_splits
+from utils import (
+    CANONICAL_SEED,
+    checkpoint_path,
+    eval_sentences,
+    load_eval_and_background,
+    load_model,
+    output_path,
+)
 
 
 def _load(name: str, path: Path):
@@ -52,12 +59,59 @@ N_EXAMPLES = 100
 N_BACKGROUND = 100
 K_LOCAL = 20
 K_GLOBAL = 20
-SEED = 0
+# Sampling seed is owned by utils.sample_eval_rows; recorded here so the
+# results metadata reflects the rows actually used.
+SEED = CANONICAL_SEED
 MODE = "ablation"  # "ablation" | "steering"
 STEERING_ALPHA = 0.6723
-CHECKPOINT = "checkpoints/mlp_probe_layer_7.joblib"
-RANKINGS_DIR = Path("outputs/13_mlp_ranking")
-OUT_DIR = Path("outputs/14_local_mlp_steer")
+CHECKPOINT = checkpoint_path("mlp_probe_layer_7.joblib")
+RANKINGS_DIR = output_path("13_mlp_ranking")
+OUT_DIR = output_path("14_local_mlp_steer")
+
+
+def save_ragged(path: Path, arrays: list[np.ndarray]) -> None:
+    """
+    Save a list of variable-length int arrays as a 1-D object array.
+
+    `np.asarray(arrays, dtype=object)` silently produces a 2-D object array when
+    every element happens to be the same length, so the reload shape depends on
+    the data. Preallocating the object array pins it to 1-D either way.
+    """
+    out = np.empty(len(arrays), dtype=object)
+    for i, arr in enumerate(arrays):
+        out[i] = np.asarray(arr, dtype=np.int64)
+    np.save(path, out, allow_pickle=True)
+
+
+def orient_signed_effects(delta_signed: np.ndarray, mode: str) -> np.ndarray:
+    """
+    Put signed Δ on a scale where "faithful" always means positive ρ.
+
+    Steering adds +α, so a positive attribution predicts a positive Δ. Ablation
+    *removes* the feature, so a positive attribution predicts a *negative* Δ and
+    a perfectly faithful method scores ρ ≈ −1 on the raw numbers.
+    """
+    if mode == "ablation":
+        return -delta_signed
+    if mode == "steering":
+        return delta_signed
+    raise ValueError(f"Unknown mode={mode!r}; expected 'ablation' or 'steering'")
+
+
+def restrict_to_active(
+    cands_per_example: list[np.ndarray], active: np.ndarray
+) -> list[np.ndarray]:
+    """
+    Keep only candidates the example actually activates.
+
+    Control for the main confound in this comparison. Candidates are top-k |φ(x)|
+    ∪ top-k |Φ|, and the global-Φ half is usually *inactive* in any one sentence —
+    ablating an inactive feature moves the logit by exactly 0. Local |φ(x)| tracks
+    activity, global |Φ| does not, so a chunk of "local beats global" is really
+    "local knows which features are on in this sentence". Re-scoring on the active
+    subset asks whether the local win survives without that advantage.
+    """
+    return [cand[active[e, cand]] for e, cand in enumerate(cands_per_example)]
 
 
 def spearman_pair(
@@ -132,7 +186,6 @@ def get_per_example_intervention_effects(
     n = all_tokens.shape[0]
     k = len(candidate_global)
     intervene_point = f"blocks.{layer}.hook_resid_post"
-    pad_id = _steer14._pad_token_id(model)
     pos_id, neg_id = _steer14.sentiment_token_ids(
         model, _steer14.POS_TOKEN, _steer14.NEG_TOKEN
     )
@@ -145,7 +198,7 @@ def get_per_example_intervention_effects(
             with model.hooks(fwd_hooks=fwd_hooks):
                 logits = model(tokens)
             return _steer14.last_non_pad_logit_diff(
-                logits, tokens, pad_id, pos_id, neg_id
+                model, logits, tokens, pos_id, neg_id
             )
 
     def score_all(fwd_hooks: list, desc: str) -> np.ndarray:
@@ -188,42 +241,36 @@ def per_example_faithfulness(
     cands_per_example: list[np.ndarray],
     union_local: np.ndarray,
     delta_signed: np.ndarray,
+    mode: str,
 ) -> dict[str, dict]:
     """
     method_scores_filtered[name]: (n_filtered,) global scores on filtered axis
     local_shap: (n_examples, n_filtered)
-    cands_per_example[e]: filtered-axis indices for example e
+    cands_per_example[e]: filtered-axis indices for example e (may be empty)
     union_local: (n_union,) filtered indices aligning delta_signed columns
-    delta_signed: (n_examples, n_union)
+    delta_signed: (n_examples, n_union), raw (un-oriented) effects
+    mode: sets the directional sign convention, see `orient_signed_effects`
     """
     n = local_shap.shape[0]
     col_of = {int(f): j for j, f in enumerate(union_local)}
+    oriented = orient_signed_effects(delta_signed, mode)
     out: dict[str, dict] = {}
 
-    rho_imp, rho_dir = [], []
-    for e in range(n):
-        cand = cands_per_example[e]
-        cols = np.asarray([col_of[int(c)] for c in cand], dtype=np.int64)
-        s = local_shap[e, cand]
-        d = delta_signed[e, cols]
-        ri, _ = spearman_pair(s, d, importance=True)
-        rd, _ = spearman_pair(s, d, importance=False)
-        rho_imp.append(ri)
-        rho_dir.append(rd)
-    out["local_SHAP"] = {
-        "importance_rho": np.asarray(rho_imp, dtype=np.float64),
-        "directional_rho": np.asarray(rho_dir, dtype=np.float64),
-    }
-
-    for name, scores in method_scores_filtered.items():
+    scores_by_name = {"local_SHAP": None, **method_scores_filtered}
+    for name, scores in scores_by_name.items():
         rho_imp, rho_dir = [], []
         for e in range(n):
-            cand = cands_per_example[e]
+            cand = np.asarray(cands_per_example[e], dtype=np.int64)
+            if len(cand) < 3:
+                rho_imp.append(float("nan"))
+                rho_dir.append(float("nan"))
+                continue
             cols = np.asarray([col_of[int(c)] for c in cand], dtype=np.int64)
-            s_cand = scores[cand]
-            d = delta_signed[e, cols]
-            ri, _ = spearman_pair(s_cand, d, importance=True)
-            rd, _ = spearman_pair(s_cand, d, importance=False)
+            # local SHAP is per-example; every other method is one fixed vector
+            s = local_shap[e, cand] if scores is None else scores[cand]
+            d = oriented[e, cols]
+            ri, _ = spearman_pair(s, d, importance=True)
+            rd, _ = spearman_pair(s, d, importance=False)
             rho_imp.append(ri)
             rho_dir.append(rd)
         out[name] = {
@@ -233,24 +280,60 @@ def per_example_faithfulness(
     return out
 
 
-def summarize_rhos(faith: dict[str, dict]) -> dict[str, dict]:
+def summarize_rhos(faith: dict[str, dict], prefix: str = "") -> dict[str, dict]:
     summary = {}
     for name, block in faith.items():
         for kind in ("importance_rho", "directional_rho"):
             arr = block[kind]
-            key = f"{name}:{kind}"
+            key = f"{prefix}{name}:{kind}"
+            has_any = bool(np.isfinite(arr).any())
             summary[key] = {
-                "mean": float(np.nanmean(arr)),
-                "std": float(np.nanstd(arr)),
+                "mean": float(np.nanmean(arr)) if has_any else float("nan"),
+                "std": float(np.nanstd(arr)) if has_any else float("nan"),
                 "n_finite": int(np.isfinite(arr).sum()),
             }
     local_imp = faith["local_SHAP"]["importance_rho"]
     global_imp = faith["global_SHAP"]["importance_rho"]
     finite = np.isfinite(local_imp) & np.isfinite(global_imp)
-    summary["frac_local_gt_global_importance"] = float(
+    summary[f"{prefix}frac_local_gt_global_importance"] = float(
         np.mean(local_imp[finite] > global_imp[finite]) if finite.any() else float("nan")
     )
     return summary
+
+
+ORDER = ["local_SHAP", "global_SHAP", "Probe saliency", "IG", "GA"]
+# ‖W1[i,:]‖₂ has no sign, so it cannot predict the direction of a signed Δ.
+UNSIGNED_METHODS = frozenset({"Probe saliency"})
+
+
+def _block(summary: dict, prefix: str, mode: str) -> list[str]:
+    lines = ["Importance (|attr| vs |Δ|):"]
+    for name in ORDER:
+        key = f"{prefix}{name}:importance_rho"
+        if key not in summary:
+            continue
+        s = summary[key]
+        lines.append(
+            f"  {name:14s}  ρ={s['mean']:+.3f} ± {s['std']:.3f}  (n={s['n_finite']})"
+        )
+    effect_desc = "−Δ" if mode == "ablation" else "Δ"
+    lines.append(f"Directional (attr vs {effect_desc}; positive = faithful):")
+    for name in ORDER:
+        key = f"{prefix}{name}:directional_rho"
+        if key not in summary:
+            continue
+        if name in UNSIGNED_METHODS:
+            lines.append(f"  {name:14s}  n/a (magnitude-only score, no direction)")
+            continue
+        s = summary[key]
+        lines.append(
+            f"  {name:14s}  ρ={s['mean']:+.3f} ± {s['std']:.3f}  (n={s['n_finite']})"
+        )
+    frac = summary.get(f"{prefix}frac_local_gt_global_importance", float("nan"))
+    lines.append(
+        f"Fraction examples with ρ_local_SHAP > ρ_global_SHAP (importance): {frac:.3f}"
+    )
+    return lines
 
 
 def print_summary(
@@ -262,34 +345,18 @@ def print_summary(
         f"mode={mode}  candidates=top-{k_local} local ∪ top-{k_global} global  "
         f"N={n}  n_union={n_union}",
         "",
-        "Mean Spearman ρ across examples (± std)",
-        "Importance (|attr| vs |Δ|):",
+        "[A] All candidates — mean Spearman ρ across examples (± std)",
     ]
-    order = [
-        "local_SHAP",
-        "global_SHAP",
-        "Probe saliency",
-        "IG",
-        "GA",
+    lines += _block(summary, "", mode)
+    lines += [
+        "",
+        "[B] Active candidates only (control)",
+        "    Inactive features move the logit by ~0 under ablation, and local |φ(x)|",
+        "    tracks activity while global |Φ| does not — so part of any local win in",
+        "    [A] is just 'local knows which features are on here'. [B] removes that",
+        "    advantage; a local win that survives here is about ranking, not activity.",
     ]
-    for name in order:
-        key = f"{name}:importance_rho"
-        if key not in summary:
-            continue
-        s = summary[key]
-        lines.append(f"  {name:14s}  ρ={s['mean']:+.3f} ± {s['std']:.3f}")
-    lines.append("Directional (attr vs Δ):")
-    for name in order:
-        key = f"{name}:directional_rho"
-        if key not in summary:
-            continue
-        s = summary[key]
-        lines.append(f"  {name:14s}  ρ={s['mean']:+.3f} ± {s['std']:.3f}")
-    lines.append("")
-    frac = summary.get("frac_local_gt_global_importance", float("nan"))
-    lines.append(
-        f"Fraction examples with ρ_local_SHAP > ρ_global_SHAP (importance): {frac:.3f}"
-    )
+    lines += _block(summary, "active:", mode)
     lines.append("")
     return "\n".join(lines)
 
@@ -301,7 +368,7 @@ def main() -> None:
     ranking_indices = np.load(RANKINGS_DIR / "feature_indices.npy")
     if not np.array_equal(feature_indices, ranking_indices):
         raise ValueError(
-            "Checkpoint feature_indices != outputs/13_mlp_ranking/feature_indices.npy"
+            f"Checkpoint feature_indices != {RANKINGS_DIR / 'feature_indices.npy'}"
         )
 
     probe_f = np.load(RANKINGS_DIR / "probe_scores.npy").astype(np.float64)
@@ -326,13 +393,11 @@ def main() -> None:
         f"mode={MODE}, alpha={STEERING_ALPHA}"
     )
 
-    rng = np.random.default_rng(SEED)
-    shap_acts = np.load(f"activations/shap/layer_{LAYER}/activations.npy")
-    train_acts = np.load(f"activations/probe_train/layer_{LAYER}/activations.npy")
-    pick = rng.choice(len(shap_acts), size=N_EXAMPLES, replace=False)
-    bg_idx = rng.choice(len(train_acts), size=N_BACKGROUND, replace=False)
-    shap_eval = shap_acts[pick]
-    background = train_acts[bg_idx]
+    # Shared sampler => these rows are an ordered prefix of the rows the global
+    # scripts explain, so local and global results join by position.
+    shap_eval, background, pick, bg_idx = load_eval_and_background(
+        layer=LAYER, n_eval=N_EXAMPLES, n_background=N_BACKGROUND
+    )
 
     print(
         f"Computing local DeepSHAP on {N_EXAMPLES} examples × "
@@ -356,8 +421,7 @@ def main() -> None:
     sae = SAE.from_pretrained("gpt2-small-resid-post-v5-32k", "blocks.7.hook_resid_post")
     sae = sae.to(model.cfg.device)
 
-    _, _, shap_ds = load_splits()
-    sentences = [shap_ds[int(i)]["sentence"] for i in pick]
+    sentences = eval_sentences(pick)
     all_tokens = model.to_tokens(sentences)
 
     pos_id, neg_id = _steer14.sentiment_token_ids(model)
@@ -383,9 +447,22 @@ def main() -> None:
         "GA": ga_f,
     }
     faith = per_example_faithfulness(
-        method_scores_f, local_shap, cands_per_example, union_local, delta_signed
+        method_scores_f, local_shap, cands_per_example, union_local, delta_signed, MODE
     )
-    summary = summarize_rhos(faith)
+
+    # Control for the activity confound; see `restrict_to_active`.
+    active = np.asarray(shap_eval[:, feature_indices], dtype=np.float64) > 0
+    active_cands = restrict_to_active(cands_per_example, active)
+    n_active = np.asarray([len(c) for c in active_cands], dtype=np.int64)
+    print(
+        f"Active-candidate control: mean {n_active.mean():.1f} of "
+        f"{n_cands.mean():.1f} candidates fire per example"
+    )
+    faith_active = per_example_faithfulness(
+        method_scores_f, local_shap, active_cands, union_local, delta_signed, MODE
+    )
+
+    summary = {**summarize_rhos(faith), **summarize_rhos(faith_active, "active:")}
     text = print_summary(
         summary, MODE, K_LOCAL, K_GLOBAL, N_EXAMPLES, len(union_local)
     )
@@ -407,14 +484,21 @@ def main() -> None:
     np.save(OUT_DIR / "union_local.npy", union_local)
     np.save(OUT_DIR / "union_global.npy", union_global)
     np.save(OUT_DIR / "n_cands_per_example.npy", n_cands)
-    np.save(OUT_DIR / "cands_per_example.npy", np.asarray(cands_per_example, dtype=object))
+    np.save(OUT_DIR / "n_active_cands_per_example.npy", n_active)
+    save_ragged(OUT_DIR / "cands_per_example.npy", cands_per_example)
+    save_ragged(OUT_DIR / "active_cands_per_example.npy", active_cands)
     np.save(OUT_DIR / "local_shap.npy", local_shap)
     np.save(OUT_DIR / f"delta_signed_{MODE}.npy", delta_signed)
     np.save(OUT_DIR / f"delta_abs_{MODE}.npy", delta_abs)
-    for name, block in faith.items():
-        safe = name.replace(" ", "_")
-        np.save(OUT_DIR / f"rho_importance_{safe}.npy", block["importance_rho"])
-        np.save(OUT_DIR / f"rho_directional_{safe}.npy", block["directional_rho"])
+    for prefix, block_set in (("", faith), ("active_", faith_active)):
+        for name, block in block_set.items():
+            safe = name.replace(" ", "_")
+            np.save(
+                OUT_DIR / f"{prefix}rho_importance_{safe}.npy", block["importance_rho"]
+            )
+            np.save(
+                OUT_DIR / f"{prefix}rho_directional_{safe}.npy", block["directional_rho"]
+            )
     with open(OUT_DIR / "summary.json", "w") as f:
         json.dump(
             {
@@ -424,9 +508,10 @@ def main() -> None:
                 "n_examples": N_EXAMPLES,
                 "n_union": int(len(union_local)),
                 "mean_n_cands": float(n_cands.mean()),
+                "mean_n_active_cands": float(n_active.mean()),
                 "steering_alpha": STEERING_ALPHA,
                 "seed": SEED,
-                "checkpoint": CHECKPOINT,
+                "checkpoint": str(CHECKPOINT),
                 **summary,
             },
             f,
