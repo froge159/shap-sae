@@ -1,10 +1,12 @@
 """
 Recompute SHAP with LinearExplainer (exact for the linear probe).
 
-Differences from core/3_shap_comp.py:
+Historical differences from core/3_shap_comp.py's original KernelSHAP pass
+(that computation was later removed from 3_shap_comp.py — nothing downstream
+read its outputs — which now only computes and saves the feature mask):
   - LinearExplainer instead of KernelExplainer
-  - Explains the **log-odds margin**, not `predict_proba` — magnitudes are on a
-    different scale from 3_shap_comp's Φ and are not interchangeable with it
+  - Explains the **log-odds margin**, not `predict_proba` — magnitudes were on
+    a different scale from the old Φ and were not interchangeable with it
     (rank correlations survive the monotone link; effect sizes do not)
   - Phi = mean signed SHAP (not mean absolute)
   - Also reports per-feature sign-consistency (% of examples agreeing on sign)
@@ -36,7 +38,7 @@ from utils import (
     output_path,
 )
 
-# The feature mask lives in core/3_shap_comp.py; do not re-derive it here.
+# The feature mask lives in utils.get_shap_feature_mask; do not re-derive it here.
 
 
 def make_filtered_probe(probe: LogisticRegression, feature_indices: np.ndarray):

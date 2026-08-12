@@ -39,6 +39,33 @@ def checkpoint_path(*parts: str) -> Path:
     return CHECKPOINTS_DIR.joinpath(*parts)
 
 
+def get_shap_feature_mask(
+    probe, val_activations: np.ndarray, min_activation_freq: float = 0.05
+):
+    """
+    Filtered feature set: non-zero probe weight AND active often enough.
+
+    `val_activations` must come from the *val* split. This mask defines the
+    MLP probe's input layer and the steering candidate pool, so deriving it
+    from the shap split would let the held-out set shape the models it is
+    later used to evaluate.
+    """
+    # Filter 1: non-zero probe weights
+    nonzero_mask = probe.coef_[0] != 0  # shape: (32768,)
+
+    # Filter 2: activation frequency on val set
+    activation_freq = (val_activations > 0).mean(axis=0)  # shape: (32768,)
+    freq_mask = activation_freq >= min_activation_freq
+
+    combined_mask = nonzero_mask & freq_mask
+    feature_indices = np.where(combined_mask)[0]
+
+    print(f"Non-zero probe weights: {nonzero_mask.sum()}")
+    print(f"After frequency filter: {len(feature_indices)}")
+
+    return feature_indices
+
+
 def load_model():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = HookedSAETransformer.from_pretrained_no_processing("gpt2", device=device)

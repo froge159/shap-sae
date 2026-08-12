@@ -1,4 +1,3 @@
-import json
 import sys
 from pathlib import Path
 
@@ -11,7 +10,7 @@ _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from utils import checkpoint_path, output_path
+from utils import checkpoint_path
 
 LAYERS = tuple(range(7, 8))  # manually adjust
 
@@ -28,7 +27,7 @@ def train_probe(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
     L1 logistic probe on full-width SAE activations.
 
     `l1_ratio=1` is the L1 selector, and it is load-bearing rather than cosmetic:
-    `3_shap_comp.get_shap_feature_mask` is `(coef != 0) & frequent_enough`, so
+    `utils.get_shap_feature_mask` is `(coef != 0) & frequent_enough`, so
     under L2 almost nothing is exactly zero (~12k non-zero vs ~1.4k on the same
     rows), the sparsity filter degenerates towards a no-op, and the filtered
     feature set — which gates the MLP probe's inputs and the steering candidate
@@ -83,35 +82,21 @@ def main():
         probe = train_probe(X_train, y_train)
         results = evaluate_probe(probe, X_val, y_val, LAYER)
 
-
         ckpt_dir = checkpoint_path()
         ckpt_dir.mkdir(parents=True, exist_ok=True)
         joblib.dump(probe, ckpt_dir / f"probe_layer_{LAYER}.joblib")
 
-        out_dir = output_path("2_probes")
-        out_dir.mkdir(parents=True, exist_ok=True)
-        top_features_path = out_dir / f"top_features_layer_{LAYER}.json"
-
-        with open(top_features_path, "w") as f:
-            json.dump(results["top_features"], f, indent=2)
-        with open(out_dir / f"results_layer_{LAYER}.json", "w") as f:
-            json.dump(
-                {k: v for k, v in results.items() if k != "top_features"}, f, indent=2
-            )
-
         print(f"Layer {LAYER} probe results")
         print(f"  Val accuracy:        {results['accuracy']:.4f}")
         print(f"  Non-zero weights:    {results['n_nonzero_weights']} / {results['n_features']}")
-        print(f"  Top 20 features saved to {top_features_path}")
         print("  Top 20 features by |weight|:")
-        
+
         for rank, feat in enumerate(results["top_features"], start=1):
             print(
                 f"    {rank:2d}. feature {feat['feature_idx']:5d}  "
                 f"weight {feat['weight']:+.6f}"
             )
-        
-        
+
 
 if __name__ == "__main__":
     main()

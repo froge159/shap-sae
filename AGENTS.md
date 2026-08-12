@@ -14,13 +14,13 @@ shap-sae/
 ├── outputs/                # SHAP matrices, results, figures
 ├── notebooks/              # exploration and figure generation only
 └── src/
-    ├── utils.py                    # shared helpers: splits, sampling, paths
+    ├── utils.py                    # shared helpers: splits, sampling, paths, feature mask
     ├── core/
     │   ├── 1_extract.py            # activation extraction pipeline
     │   ├── 2_probes.py             # L1 logistic probe
-    │   └── 3_shap_comp.py          # KernelSHAP + the feature mask
+    │   └── 3_shap_comp.py          # SHAP feature mask (filtered support)
     ├── global_linear/              # the logistic-probe arm
-    │   ├── 6_shap_stability.py     # KernelSHAP seed stability
+    │   ├── 6_shap_stability.py     # DEPRECATED — KernelSHAP seed stability (see script docstring)
     │   ├── 7_shap_recompute.py     # exact LinearSHAP, signed Phi
     │   ├── 8_feature_ranking.py    # IG / GA / probe / SHAP rank agreement
     │   ├── 9.5_tuning.py           # steering alpha calibration
@@ -134,7 +134,7 @@ prefixes, so a 100-row local sample is an ordered prefix of the 2000-row global
 sample and results join by position. Pair sentences to activation rows with
 `utils.eval_sentences`, never by indexing a split dataset directly.
 
-**Feature mask:** `core/3_shap_comp.get_shap_feature_mask` is the only definition
+**Feature mask:** `utils.get_shap_feature_mask` is the only definition
 of the filtered feature set, and its frequency filter runs on **val**. It gates
 the MLP probe's input layer and the steering candidate pool, so deriving it from
 held-out data would let the eval split shape the models it later scores. A 500-row
@@ -151,15 +151,19 @@ fit (~12k non-zero vs ~1.4k) quietly turns the sparsity filter into a no-op.
 
 | Script | Explainer | Target function | Aggregation |
 |---|---|---|---|
-| `core/3_shap_comp` | KernelSHAP | `predict_proba[:,1]` | mean \|φ\| |
 | `global_linear/7_shap_recompute` | LinearSHAP (exact) | log-odds margin | mean signed φ |
 | `global_mlp/12_mlp_shap` | DeepSHAP | pre-sigmoid logit | mean signed φ |
 
 Rank correlations survive the monotone links between these; effect sizes do not.
-`6_shap_stability` measures the KernelSHAP variant only — it does not certify the
-Φ that 8/9/10/group_steering actually consume. `7_shap_recompute` deliberately
-explains all 32768 features rather than the mask (exact and cheap, so no reason
-to filter); consumers needing the filtered pool slice it themselves.
+`core/3_shap_comp` no longer computes an attribution — it only saves the
+filtered feature mask (`shap_feature_indices.npy`) that other scripts load.
+It used to also run KernelSHAP; that had no downstream readers and was removed.
+`6_shap_stability`, which measured that KernelSHAP path's seed stability, is
+deprecated as a result (see its module docstring) — it never certified the Φ
+that 8/9/10/group_steering actually consume, and now has nothing left to
+measure. `7_shap_recompute` deliberately explains all 32768 features rather
+than the mask (exact and cheap, so no reason to filter); consumers needing the
+filtered pool slice it themselves.
 
 **Steering vs ablation sign convention:** steering adds `+α`, so a positive
 attribution predicts a positive Δ. Ablation *removes* the feature, so a positive
@@ -212,9 +216,11 @@ Real limits of the current design. State them alongside any number you quote;
 they are not bugs to fix silently.
 
 - **The committed `outputs/` predate the current scripts.** No directory contains
-  the `eval_indices.npy` that 3/6/7/8/12/13 now write, and the saved
+  the `eval_indices.npy` that 7/8/12/13 now write, and the saved
   `shap_values_raw.npy` files are 500 rows while the IG/GA arrays beside them are
   2000. Treat the checked-in numbers as illustrative until the chain is re-run.
+  (`3_shap_comp.py` no longer writes an `eval_indices.npy` at all — it only
+  saves the feature mask — and `6_shap_stability` is deprecated.)
 - **α is calibrated against a different readout than it is used with.**
   `9.5_tuning` picks α from a layer-11 residual probe's P(positive); the steer
   scripts read out a GPT-2 logit difference. α is a rough "measurable but

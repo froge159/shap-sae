@@ -1,12 +1,23 @@
 """
+DEPRECATED — no longer runnable as-is. Kept for historical reference only.
+
 Seed stability of KernelSHAP: rerun the same data with different explainer seeds
 and rank-correlate the resulting Φ.
 
-Scope note: this measures the *KernelSHAP* estimator from core/3_shap_comp.py,
-which explains `predict_proba[:, 1]` and aggregates |φ|. Everything downstream
+Scope note: this measured the *KernelSHAP* estimator from core/3_shap_comp.py,
+which explained `predict_proba[:, 1]` and aggregated |φ|. Everything downstream
 (7_shap_recompute onwards) uses exact LinearSHAP on the log-odds margin with a
 *signed* mean instead — an exact explainer with no sampling seed. So a good ρ
-here says KernelSHAP is stable; it does not certify the Φ those scripts consume.
+here said KernelSHAP was stable; it never certified the Φ those scripts consume.
+
+core/3_shap_comp.py was later trimmed down to just the SHAP feature-mask
+computation (the KernelSHAP run and its outputs were dead ends — nothing
+downstream read them). That removed `run_kernelshap`, `build_attribution_matrix`,
+and `prepare_shap_inputs`, which this script dynamically loads and calls below.
+There is no replacement estimator this script could point at instead: it exists
+specifically to measure KernelSHAP's sampling variance, and KernelSHAP is no
+longer part of the pipeline. main() raises immediately rather than failing with
+a confusing AttributeError partway through a run.
 """
 
 from __future__ import annotations
@@ -27,7 +38,7 @@ _ROOT = _SRC.parent
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from utils import checkpoint_path, load_activations, output_path
+from utils import checkpoint_path, get_shap_feature_mask, load_activations, output_path
 
 
 def _load_shap_comp():
@@ -92,6 +103,15 @@ def main(
     n_shap_samples: int = 256,
     out_dir: Path | None = None,
 ):
+    raise RuntimeError(
+        "6_shap_stability.py is deprecated: it measured KernelSHAP's seed "
+        "stability via core/3_shap_comp.py's run_kernelshap/build_attribution_matrix/"
+        "prepare_shap_inputs, but 3_shap_comp.py was trimmed to only compute the "
+        "SHAP feature mask (the KernelSHAP run had no downstream readers). Those "
+        "functions no longer exist, and KernelSHAP is no longer part of the "
+        "pipeline, so there is nothing left for this script to measure. See the "
+        "module docstring."
+    )
     if explainer_seeds is None:
         explainer_seeds = [42, 43, 44, 45, 46]
     checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else checkpoint_path()
@@ -107,7 +127,7 @@ def main(
         n_shap=n_shap,
         seed=data_seed,
     )
-    feature_indices = shap_comp.get_shap_feature_mask(
+    feature_indices = get_shap_feature_mask(
         probe, load_activations("val", layer, mmap=True)
     )
 
