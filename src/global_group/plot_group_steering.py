@@ -86,21 +86,42 @@ def plot_effect_vs_cost(
     if ax is None:
         _, ax = plt.subplots(figsize=(7.5, 5.0))
 
+    missing = []
     for method in METHODS:
         pts = by.get((probe, method, k), [])
         if not pts:
+            missing.append(method)
             continue
         xs = [float(p["cost"]) for p in pts]
         ys = [float(p["effect"]) for p in pts]
+        # actdiff is arm-independent — the same curve appears on both panels by
+        # design, not by accident. Mark it so the two are not read as replicates.
+        arm_independent = bool(pts[0].get("arm_independent"))
+        label = METHOD_LABELS[method] + (" (shared)" if arm_independent else "")
         ax.plot(
             xs,
             ys,
-            "-o",
+            "-o" if not arm_independent else "--o",
             color=METHOD_COLORS[method],
-            label=METHOD_LABELS[method],
+            label=label,
             markersize=5,
             linewidth=1.8,
             zorder=3,
+        )
+
+    # A method absent from this panel is a deliberate exclusion, not a failed run
+    # (mlp/probe is dropped because ‖W1‖₂ is unsigned). Say so on the axes rather
+    # than leaving a silent gap in the legend.
+    if missing:
+        ax.text(
+            0.98,
+            0.03,
+            "excluded: " + ", ".join(METHOD_LABELS[m] for m in missing),
+            transform=ax.transAxes,
+            fontsize=8,
+            color="0.4",
+            va="bottom",
+            ha="right",
         )
 
     ax.axhline(0.0, color="0.55", linewidth=0.9, zorder=1)

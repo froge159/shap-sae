@@ -10,7 +10,7 @@ _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from utils import checkpoint_path
+from utils import CANONICAL_SEED, checkpoint_path
 
 LAYERS = tuple(range(7, 8))  # manually adjust
 
@@ -36,12 +36,20 @@ def train_probe(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
     Do not "modernise" this to `penalty="l1"`: sklearn deprecated `penalty` in
     1.8 in favour of `l1_ratio`, and passing both warns about inconsistent values
     (`penalty=l1 with l1_ratio=0.0`). This project pins scikit-learn>=1.9.
+
+    `random_state` is load-bearing too. sklearn hands it to liblinear to seed the
+    coordinate-descent data shuffling; left at None the seed comes from the global
+    NumPy RNG, so the fit — and with it the set of exactly-zero coefficients —
+    drifts between runs. That set is filter 1 of `utils.get_shap_feature_mask`, so
+    an unseeded fit quietly re-rolls the 75-feature pool that gates the MLP probe's
+    inputs, the steering candidates and the group-steering ranking pool.
     """
     probe = LogisticRegression(
         max_iter=1000,
         C=1,
         solver="liblinear",
         l1_ratio=1,
+        random_state=CANONICAL_SEED,
         verbose=0,
     )
     probe.fit(X_train, y_train)

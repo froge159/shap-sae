@@ -7,6 +7,17 @@ comparisons), but:
   - IG/GA use input-dependent gradients through ReLU (not constant ∂f/∂x = w)
   - Scores/ranks are over filtered features only; SHAP scores are Phi[indices]
 
+**Attribution target.** All methods here explain the **pre-sigmoid logit**, which
+is what 12_mlp_shap's DeepExplainer explains. IG/GA used to carry an extra
+`σ'(logit) = σ(1−σ)` factor, i.e. they attributed `σ(logit)` while SHAP attributed
+the logit. Per example that factor is a positive scalar and changes no ranking,
+but every method here averages over examples first, and two differently-reweighted
+means of the same per-example quantity are not related by any monotone map — so
+the IG-vs-SHAP Spearman was comparing two different target functions. Unlike the
+linear arm (where matching the target collapses IG = GA = SHAP into an identity),
+the ReLU keeps IG genuinely distinct from SHAP here, so this is where the real
+method comparison lives.
+
 Note on `probe_scores`: unlike the linear arm's signed `coef_`, the MLP's
 `probe_saliency` is ‖W1[i,:]‖₂ and is therefore **non-negative**. It carries
 magnitude only, so it is reported against the other methods for importance and
@@ -32,26 +43,27 @@ if str(_SRC) not in sys.path:
 from utils import checkpoint_path, load_eval_and_background, output_path
 
 
-def mlp_prob_grad(probe: MLPClassifier, x: np.ndarray) -> np.ndarray:
+def mlp_logit_grad(probe: MLPClassifier, x: np.ndarray) -> np.ndarray:
     """
-    ∇_x σ(logit) for a 1-hidden-layer ReLU MLP.
+    ∇_x (pre-sigmoid logit) for a 1-hidden-layer ReLU MLP.
+
+    The logit, *not* σ(logit): DeepSHAP in 12_mlp_shap explains the logit, and
+    IG/GA have to attribute the same function or the rank comparison in
+    `compare_rankings` confounds attribution method with target function. Do not
+    reintroduce a `σ(1−σ)` factor here — see the module docstring.
 
     x: (n_features,) or (batch, n_features)
     returns: same leading shape as x
     """
     W1, W2 = probe.coefs_
-    b1, b2 = probe.intercepts_
+    b1, _b2 = probe.intercepts_
     single = x.ndim == 1
     if single:
         x = x[None, :]
 
     pre = x @ W1 + b1                          # (batch, hidden)
-    h = np.maximum(pre, 0.0)
-    logit = h @ W2[:, 0] + b2[0]               # (batch,)
-    sig = 1.0 / (1.0 + np.exp(-logit))
     d_logit_dpre = W2[:, 0] * (pre > 0)        # (batch, hidden)
-    d_logit_dx = d_logit_dpre @ W1.T           # (batch, n_features)
-    grad = (sig * (1.0 - sig))[:, None] * d_logit_dx
+    grad = d_logit_dpre @ W1.T                 # (batch, n_features)
 
     return grad[0] if single else grad
 
@@ -70,7 +82,7 @@ def integrated_gradients(
 
     for x in tqdm(activations, total=len(activations), desc="Calculating IG", dynamic_ncols=True):
         interpolated = baseline + alphas[:, None] * (x - baseline)  # (n_steps, F)
-        grads = mlp_prob_grad(probe, interpolated)                  # (n_steps, F)
+        grads = mlp_logit_grad(probe, interpolated)                 # (n_steps, F)
         avg_grads = np.trapezoid(grads, alphas, axis=0)             # (F,)
         ig = (x - baseline) * avg_grads
         all_ig.append(ig)
@@ -94,7 +106,7 @@ def gradient_attribution(
     all_attr = []
 
     for x in tqdm(activations, total=len(activations), desc="Calculating gradients", dynamic_ncols=True):
-        grad = mlp_prob_grad(probe, x)
+        grad = mlp_logit_grad(probe, x)
         all_attr.append((x - baseline) * grad)
 
     all_attr = np.array(all_attr)
@@ -104,22 +116,6 @@ def gradient_attribution(
 def probe_saliency(probe: MLPClassifier) -> np.ndarray:
     """L2 norm of first-layer weights into each input (n_filtered,)."""
     return np.linalg.norm(probe.coefs_[0], axis=1)
-
-
-def compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores):
-    """Scores → ranks by |score| (rank 1 = largest magnitude), for readable tables."""
-    def scores_to_ranks(scores):
-        order = np.argsort(np.abs(scores))[::-1]
-        ranks = np.empty_like(order)
-        ranks[order] = np.arange(1, len(scores) + 1)
-        return ranks
-
-    probe_ranks = scores_to_ranks(probe_scores)
-    ig_ranks = scores_to_ranks(ig_scores)
-    ga_ranks = scores_to_ranks(ga_scores)
-    shap_ranks = scores_to_ranks(shap_scores)
-
-    return probe_ranks, ig_ranks, ga_ranks, shap_ranks
 
 
 def compare_rankings(probe_scores, ig_scores, shap_scores, ga_scores):

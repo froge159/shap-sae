@@ -29,7 +29,7 @@ _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from utils import checkpoint_path, load_splits, output_path
+from utils import CANONICAL_SEED, checkpoint_path, load_splits, output_path
 
 # ---------------------------------------------------------------------------
 # Strong sentiment lexicon (movie-review / SST style). No extra downloads.
@@ -238,7 +238,11 @@ def lexicon_baseline(
         return np.concatenate(preds), np.concatenate(probas)
 
     X_tr, X_ev = bow(train_sentences), bow(eval_sentences)
-    lex_clf = LogisticRegression(max_iter=2000, C=1.0, solver="liblinear")
+    # random_state pins liblinear's data shuffling; without it this baseline
+    # accuracy moves between runs.
+    lex_clf = LogisticRegression(
+        max_iter=2000, C=1.0, solver="liblinear", random_state=CANONICAL_SEED
+    )
     lex_clf.fit(X_tr, train_labels)
     lex_pred = lex_clf.predict(X_ev)
     lex_proba = lex_clf.predict_proba(X_ev)[:, 1]
@@ -287,6 +291,12 @@ def write_summary(
     lines = []
     lines.append("SST simplicity check")
     lines.append("=" * 60)
+    lines.append(
+        "POPULATION: every number below is over the FULL held-out split "
+        f"({active['n_examples']} rows), not the 2000-row canonical eval sample "
+        "the attribution and steering scripts use. Correct for this question, but "
+        "do not quote these alongside those as if they described the same rows."
+    )
     lines.append("")
     lines.append("1) Active filtered features per example")
     lines.append(f"   n_filtered_features = {active['n_features']}")

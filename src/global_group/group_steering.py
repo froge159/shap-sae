@@ -10,6 +10,19 @@ Part 2 — Sweep alpha; add α·v at blocks.7.hook_resid_post (no SAE encode/dec
   effect = mean Δ logit-diff (wonderful − awful)
   cost   = mean Δ perplexity (steered − clean baseline)
 
+Scale note: this script never touches the SAE at inference, so its baseline is a
+*clean* forward, unlike the per-feature steer scripts (9_steer / 14_mlp_steer),
+whose baseline is an encode→decode reconstruction. Both are internally consistent,
+but the two families' effect sizes are on different scales and must not be
+compared numerically — only the shapes of the effect-vs-cost curves are.
+
+Method note: the MLP arm has no *signed* per-feature probe score — its
+`probe_saliency` is ‖W1[i,:]‖₂ — so the ("mlp", "probe") vector is excluded. A
+weighted sum of unsigned magnitudes is not a sentiment direction: it would add
+positive- and negative-sentiment features with the same sign and produce a curve
+that is not comparable to the other methods'. The logistic arm keeps its `probe`
+vector, since `coef_[0]` is signed.
+
 Scoring batches over examples *and* over (vector, alpha) conditions: each token
 mini-batch is repeated across C conditions in one forward, with a hook that
 adds a different α·v to each condition block.
@@ -50,6 +63,10 @@ N_TOTAL_FEATURES = 32768
 CONFIG_PATH = Path("steering_config.json")
 OUT_PATH = output_path("group_steering", "group_steering_results.json")
 METHODS = ("shap", "probe", "ig", "ga", "actdiff")
+PROBE_ARMS = ("logistic", "mlp")
+# Internal probe_type for arm-independent vectors (actdiff). Scored once, then
+# emitted under every arm in PROBE_ARMS so downstream plots need no special case.
+SHARED_ARM = "shared"
 K_SUMMARY = 20
 # Every method in every arm ranks over this same pool. Without it the logistic
 # scores (full width) would draw top-k from all 32768 features while the MLP
@@ -109,12 +126,19 @@ def load_logistic_scores() -> dict[str, np.ndarray]:
 
 
 def load_mlp_scores() -> dict[str, np.ndarray]:
-    """Full-width attributions (zeros outside the filtered MLP feature set)."""
+    """
+    Full-width attributions (zeros outside the filtered MLP feature set).
+
+    `probe` is deliberately absent: the MLP's probe score is ‖W1[i,:]‖₂, which is
+    non-negative, and `build_steering_vector` uses the score as a *signed* weight.
+    Including it would sum positive- and negative-sentiment decoder directions
+    with the same sign. See the module docstring.
+    """
     ranking_dir = output_path("13_mlp_ranking")
     feature_indices = np.load(ranking_dir / "feature_indices.npy")
     return {
         name: expand_to_full(np.load(ranking_dir / f"{name}_scores.npy"), feature_indices)
-        for name in ("shap", "probe", "ig", "ga")
+        for name in ("shap", "ig", "ga")
     }
 
 
@@ -442,6 +466,23 @@ def main() -> None:
         raise ValueError(f"No usable k <= {len(feature_pool)} in config")
 
     print("Loading attribution scores…")
+    # The logistic arm's Phi and IG/GA come from two directories; if they were
+    # produced against different held-out samples the two arms are not comparable.
+    _shap_eval = output_path("7_shap_recompute", "eval_indices_layer7.npy")
+    _rank_eval = output_path("8_rankings_recompute", "eval_indices.npy")
+    if _shap_eval.exists() and _rank_eval.exists():
+        if not np.array_equal(np.load(_shap_eval), np.load(_rank_eval)):
+            raise ValueError(
+                "Row mismatch: 7_shap_recompute/ and 8_rankings_recompute/ were "
+                "scored on different held-out rows. Re-run both at one n_eval."
+            )
+    else:
+        print(
+            "WARNING: eval_indices missing from 7_shap_recompute/ or "
+            "8_rankings_recompute/ - cannot verify the logistic arm's scores "
+            "describe one sample."
+        )
+
     score_sets = {
         "logistic": load_logistic_scores(),
         "mlp": load_mlp_scores(),
@@ -472,18 +513,27 @@ def main() -> None:
     )
     all_vectors: dict[tuple[str, str, int], np.ndarray] = {}
     for probe_type, scores in score_sets.items():
-        scores_with_baseline = {**scores, "actdiff": actdiff}
-        scores_with_baseline = {
-            name: restrict_to_pool(s, feature_pool)
-            for name, s in scores_with_baseline.items()
+        restricted = {
+            name: restrict_to_pool(s, feature_pool) for name, s in scores.items()
         }
-        vecs = build_all_steering_vectors(W_dec, scores_with_baseline, ks)
+        vecs = build_all_steering_vectors(W_dec, restricted, ks)
         for (method, k), v in vecs.items():
             all_vectors[(probe_type, method, k)] = v
             print(
                 f"  {probe_type:8s} {method:10s} k={k:2d}  "
                 f"||v||={np.linalg.norm(v):.4f}"
             )
+    print("  (mlp/probe omitted: ||W1||_2 is unsigned, see module docstring)")
+
+    # actdiff uses no probe at all, so it is the same vector for both arms. Build
+    # and score it once under SHARED_ARM; the rows are duplicated into each
+    # probe_type after scoring so the plots still show the baseline on both panels.
+    actdiff_vecs = build_all_steering_vectors(
+        W_dec, {"actdiff": restrict_to_pool(actdiff, feature_pool)}, ks
+    )
+    for (method, k), v in actdiff_vecs.items():
+        all_vectors[(SHARED_ARM, method, k)] = v
+        print(f"  {SHARED_ARM:8s} {method:10s} k={k:2d}  ||v||={np.linalg.norm(v):.4f}")
 
     print("Computing clean baseline…")
     base_diffs, base_ppls = score_batches(
@@ -523,6 +573,24 @@ def main() -> None:
         batch_size,
         condition_batch_size,
     )
+
+    # Fan the arm-independent (actdiff) rows back out to every arm, so consumers
+    # can index by (probe_type, method, k) uniformly.
+    expanded: list[dict] = []
+    n_shared = 0
+    for row in results:
+        if row["probe_type"] != SHARED_ARM:
+            expanded.append(row)
+            continue
+        n_shared += 1
+        for arm in PROBE_ARMS:
+            expanded.append({**row, "probe_type": arm, "arm_independent": True})
+    results = expanded
+    if n_shared:
+        print(
+            f"Scored {n_shared} arm-independent conditions once and emitted them "
+            f"under each of {PROBE_ARMS}"
+        )
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT_PATH, "w") as f:

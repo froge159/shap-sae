@@ -11,10 +11,15 @@ Parallel to local/9_local_steer.py, but:
   - Reports mean Spearman ρ of local φ vs Δ, and of global Φ / probe / IG / GA
     vs the same per-example Δ — separating local SHAP soundness from errors
     introduced by averaging into Φ
+
+CLI defaults are held identical to local/9_local_steer.py (k_local = k_global =
+20, n_examples = 100). Match the flags across the arms or the comparison between
+them is void — k changes both the union size and the per-example Spearman n.
 """
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import sys
@@ -40,6 +45,7 @@ from utils import (
     load_eval_and_background,
     load_model,
     output_path,
+    resolve_steering_alphas,
 )
 
 
@@ -57,6 +63,7 @@ _steer14 = _load("mlp_steer14", _SRC / "global_mlp" / "14_mlp_steer.py")
 LAYER = 7
 N_EXAMPLES = 100
 N_BACKGROUND = 100
+# Matched to local/9_local_steer.py — do not change one arm alone.
 K_LOCAL = 20
 K_GLOBAL = 20
 # Sampling seed is owned by utils.sample_eval_rows; recorded here so the
@@ -64,6 +71,7 @@ K_GLOBAL = 20
 SEED = CANONICAL_SEED
 MODE = "ablation"  # "ablation" | "steering"
 STEERING_ALPHA = 0.6723
+ALPHA_MODE = "scaled"
 CHECKPOINT = checkpoint_path("mlp_probe_layer_7.joblib")
 RANKINGS_DIR = output_path("13_mlp_ranking")
 OUT_DIR = output_path("14_local_mlp_steer")
@@ -170,10 +178,15 @@ def get_per_example_intervention_effects(
     layer: int = LAYER,
     mode: str = "steering",
     steering_alpha: float = STEERING_ALPHA,
+    alpha_by_feature: dict[int, float] | None = None,
     batch_size: int = 32,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     One-at-a-time SAE interventions; keep per-example Δ (no mean over dataset).
+
+    `alpha_by_feature` gives a per-feature alpha (see
+    `utils.resolve_steering_alphas`); when None every feature gets
+    `steering_alpha`. Ignored under mode="ablation".
 
     Returns
     -------
@@ -214,13 +227,18 @@ def get_per_example_intervention_effects(
     loop_desc = "Ablating features" if mode == "ablation" else "Steering features"
     for j, orig_idx in enumerate(tqdm(candidate_global, desc=loop_desc)):
         idx = int(orig_idx)
+        alpha_i = (
+            steering_alpha
+            if alpha_by_feature is None
+            else float(alpha_by_feature[idx])
+        )
 
         def intervention_hook(
             resid_post,
             hook,
             feature_idx=idx,
             _mode=mode,
-            _alpha=steering_alpha,
+            _alpha=alpha_i,
         ):
             acts = _steer14._apply_feature_intervention(
                 sae.encode(resid_post), feature_idx, _mode, _alpha
@@ -361,7 +379,31 @@ def print_summary(
     return "\n".join(lines)
 
 
-def main() -> None:
+def parse_args() -> argparse.Namespace:
+    """CLI surface held identical to local/9_local_steer.py."""
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--mode", choices=("ablation", "steering"), default=MODE)
+    p.add_argument("--k-local", type=int, default=K_LOCAL)
+    p.add_argument("--k-global", type=int, default=K_GLOBAL)
+    p.add_argument("--n-examples", type=int, default=N_EXAMPLES)
+    p.add_argument("--alpha", type=float, default=STEERING_ALPHA)
+    p.add_argument(
+        "--alpha-mode", choices=("constant", "scaled"), default=ALPHA_MODE
+    )
+    p.add_argument("--out-dir", type=Path, default=OUT_DIR)
+    return p.parse_args()
+
+
+def main(
+    mode: str = MODE,
+    k_local: int = K_LOCAL,
+    k_global: int = K_GLOBAL,
+    n_examples: int = N_EXAMPLES,
+    steering_alpha: float = STEERING_ALPHA,
+    alpha_mode: str = ALPHA_MODE,
+    out_dir: Path = OUT_DIR,
+) -> None:
+    out_dir = Path(out_dir)
     payload = joblib.load(CHECKPOINT)
     probe: MLPClassifier = payload["probe"]
     feature_indices = np.asarray(payload["feature_indices"])
@@ -390,29 +432,29 @@ def main() -> None:
 
     print(
         f"MLP probe: n_filtered={n_filt}, hidden={payload.get('hidden_dim')}, "
-        f"mode={MODE}, alpha={STEERING_ALPHA}"
+        f"mode={mode}, alpha={steering_alpha}"
     )
 
     # Shared sampler => these rows are an ordered prefix of the rows the global
     # scripts explain, so local and global results join by position.
     shap_eval, background, pick, bg_idx = load_eval_and_background(
-        layer=LAYER, n_eval=N_EXAMPLES, n_background=N_BACKGROUND
+        layer=LAYER, n_eval=n_examples, n_background=N_BACKGROUND
     )
 
     print(
-        f"Computing local DeepSHAP on {N_EXAMPLES} examples × "
+        f"Computing local DeepSHAP on {n_examples} examples × "
         f"{len(feature_indices)} features…"
     )
     local_shap = _shap12.run_deepshap(probe, shap_eval, background, feature_indices)
     print(f"  local_shap shape={local_shap.shape}")
 
     cands_per_example, union_local = build_per_example_candidates(
-        local_shap, shap_global_f, K_LOCAL, K_GLOBAL
+        local_shap, shap_global_f, k_local, k_global
     )
     union_global = feature_indices[union_local]
     n_cands = np.asarray([len(c) for c in cands_per_example], dtype=np.int64)
     print(
-        f"Per-example candidates: top-{K_LOCAL} |φ(x)| ∪ top-{K_GLOBAL} |Φ|  "
+        f"Per-example candidates: top-{k_local} |φ(x)| ∪ top-{k_global} |Φ|  "
         f"(mean |cand|={n_cands.mean():.1f}, union={len(union_local)})"
     )
 
@@ -427,8 +469,16 @@ def main() -> None:
     pos_id, neg_id = _steer14.sentiment_token_ids(model)
     print(
         f"Logit-diff readout: {_steer14.POS_TOKEN!r}({pos_id}) - "
-        f"{_steer14.NEG_TOKEN!r}({neg_id}); N={N_EXAMPLES}, mode={MODE}"
+        f"{_steer14.NEG_TOKEN!r}({neg_id}); N={n_examples}, mode={mode}"
     )
+
+    if mode == "steering":
+        alpha_by_feature, alpha_desc = resolve_steering_alphas(
+            union_global, steering_alpha, alpha_mode
+        )
+        print(f"Steering strength: {alpha_desc}")
+    else:
+        alpha_by_feature, alpha_desc = None, "n/a (ablation zeroes the feature)"
 
     delta_signed, delta_abs = get_per_example_intervention_effects(
         model,
@@ -436,8 +486,9 @@ def main() -> None:
         all_tokens,
         union_global,
         layer=LAYER,
-        mode=MODE,
-        steering_alpha=STEERING_ALPHA,
+        mode=mode,
+        steering_alpha=steering_alpha,
+        alpha_by_feature=alpha_by_feature,
     )
 
     method_scores_f = {
@@ -447,7 +498,7 @@ def main() -> None:
         "GA": ga_f,
     }
     faith = per_example_faithfulness(
-        method_scores_f, local_shap, cands_per_example, union_local, delta_signed, MODE
+        method_scores_f, local_shap, cands_per_example, union_local, delta_signed, mode
     )
 
     # Control for the activity confound; see `restrict_to_active`.
@@ -459,12 +510,12 @@ def main() -> None:
         f"{n_cands.mean():.1f} candidates fire per example"
     )
     faith_active = per_example_faithfulness(
-        method_scores_f, local_shap, active_cands, union_local, delta_signed, MODE
+        method_scores_f, local_shap, active_cands, union_local, delta_signed, mode
     )
 
     summary = {**summarize_rhos(faith), **summarize_rhos(faith_active, "active:")}
     text = print_summary(
-        summary, MODE, K_LOCAL, K_GLOBAL, N_EXAMPLES, len(union_local)
+        summary, mode, k_local, k_global, n_examples, len(union_local)
     )
     print("\n" + text)
 
@@ -477,39 +528,41 @@ def main() -> None:
             f"Δ̄={mean_signed[j]:+.4f}"
         )
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    np.save(OUT_DIR / "example_indices.npy", pick)
-    np.save(OUT_DIR / "background_indices.npy", bg_idx)
-    np.save(OUT_DIR / "feature_indices.npy", feature_indices)
-    np.save(OUT_DIR / "union_local.npy", union_local)
-    np.save(OUT_DIR / "union_global.npy", union_global)
-    np.save(OUT_DIR / "n_cands_per_example.npy", n_cands)
-    np.save(OUT_DIR / "n_active_cands_per_example.npy", n_active)
-    save_ragged(OUT_DIR / "cands_per_example.npy", cands_per_example)
-    save_ragged(OUT_DIR / "active_cands_per_example.npy", active_cands)
-    np.save(OUT_DIR / "local_shap.npy", local_shap)
-    np.save(OUT_DIR / f"delta_signed_{MODE}.npy", delta_signed)
-    np.save(OUT_DIR / f"delta_abs_{MODE}.npy", delta_abs)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    np.save(out_dir / "example_indices.npy", pick)
+    np.save(out_dir / "background_indices.npy", bg_idx)
+    np.save(out_dir / "feature_indices.npy", feature_indices)
+    np.save(out_dir / "union_local.npy", union_local)
+    np.save(out_dir / "union_global.npy", union_global)
+    np.save(out_dir / "n_cands_per_example.npy", n_cands)
+    np.save(out_dir / "n_active_cands_per_example.npy", n_active)
+    save_ragged(out_dir / "cands_per_example.npy", cands_per_example)
+    save_ragged(out_dir / "active_cands_per_example.npy", active_cands)
+    np.save(out_dir / "local_shap.npy", local_shap)
+    np.save(out_dir / f"delta_signed_{mode}.npy", delta_signed)
+    np.save(out_dir / f"delta_abs_{mode}.npy", delta_abs)
     for prefix, block_set in (("", faith), ("active_", faith_active)):
         for name, block in block_set.items():
             safe = name.replace(" ", "_")
             np.save(
-                OUT_DIR / f"{prefix}rho_importance_{safe}.npy", block["importance_rho"]
+                out_dir / f"{prefix}rho_importance_{safe}.npy", block["importance_rho"]
             )
             np.save(
-                OUT_DIR / f"{prefix}rho_directional_{safe}.npy", block["directional_rho"]
+                out_dir / f"{prefix}rho_directional_{safe}.npy", block["directional_rho"]
             )
-    with open(OUT_DIR / "summary.json", "w") as f:
+    with open(out_dir / "summary.json", "w") as f:
         json.dump(
             {
-                "mode": MODE,
-                "k_local": K_LOCAL,
-                "k_global": K_GLOBAL,
-                "n_examples": N_EXAMPLES,
+                "mode": mode,
+                "k_local": k_local,
+                "k_global": k_global,
+                "n_examples": n_examples,
                 "n_union": int(len(union_local)),
                 "mean_n_cands": float(n_cands.mean()),
                 "mean_n_active_cands": float(n_active.mean()),
-                "steering_alpha": STEERING_ALPHA,
+                "steering_alpha": steering_alpha,
+                "alpha_mode": alpha_mode if mode == "steering" else None,
+                "alpha_desc": alpha_desc,
                 "seed": SEED,
                 "checkpoint": str(CHECKPOINT),
                 **summary,
@@ -517,9 +570,18 @@ def main() -> None:
             f,
             indent=2,
         )
-    (OUT_DIR / "summary.txt").write_text(text + "\n")
-    print(f"\nWrote outputs → {OUT_DIR}/")
+    (out_dir / "summary.txt").write_text(text + "\n")
+    print(f"\nWrote outputs → {out_dir}/")
 
 
 if __name__ == "__main__":
-    main()
+    _args = parse_args()
+    main(
+        mode=_args.mode,
+        k_local=_args.k_local,
+        k_global=_args.k_global,
+        n_examples=_args.n_examples,
+        steering_alpha=_args.alpha,
+        alpha_mode=_args.alpha_mode,
+        out_dir=_args.out_dir,
+    )

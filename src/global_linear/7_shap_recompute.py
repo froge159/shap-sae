@@ -65,7 +65,14 @@ def run_linearshap(
     background_filtered = background[:, feature_indices]
     filtered_probe = make_filtered_probe(probe, feature_indices)
 
-    explainer = shap.LinearExplainer(filtered_probe, background_filtered)
+    # Build the masker explicitly. Handing LinearExplainer a raw array makes it
+    # construct `maskers.Independent(bg)`, whose default `max_samples=100` would
+    # silently take an *unseeded* random subsample of any background larger than
+    # 100 rows. Passing the full count pins it whatever DEFAULT_N_BACKGROUND is.
+    masker = shap.maskers.Independent(
+        background_filtered, max_samples=len(background_filtered)
+    )
+    explainer = shap.LinearExplainer(filtered_probe, masker)
     shap_values = explainer.shap_values(shap_eval_filtered)
 
     return np.asarray(shap_values)
@@ -150,7 +157,12 @@ def main(
 
     os.makedirs(out_dir, exist_ok=True)
     np.save(f"{out_dir}/shap_values_raw.npy", shap_values)
-    np.save(f"{out_dir}/shap_feature_indices.npy", feature_indices)
+    # NOT a feature mask: this is the set of columns explained, which here is all
+    # 32768. Deliberately not named `shap_feature_indices.npy` — that name is
+    # taken by the 75-entry filtered mask in 3_shap/ and 12_mlp_shap/, and three
+    # files sharing one name across two index spaces is how a mask/space mix-up
+    # gets written.
+    np.save(f"{out_dir}/explained_feature_indices.npy", feature_indices)
     np.save(f"{out_dir}/phi_sentiment_layer7_signed.npy", Phi)
     np.save(f"{out_dir}/sign_consistency_layer7.npy", consistency)
     np.save(f"{out_dir}/top_k_idx_layer7.npy", top_k_idx)

@@ -17,11 +17,12 @@ Method (plain language)
 4. For each sentence x, build a candidate feature set = top-k by |φ(x)| ∪ top-k
    by |Φ|.
 5. For each candidate feature i on that sentence only:
-     - Probe target (default): zero feature i in the probe input, measure
-       Δ logit = f(x with i zeroed) − f(x).
-     - LM target (optional): SAE encode → zero i → decode at resid_post,
-       measure Δ (logit wonderful − logit awful), matching 14_mlp_steer but
-       *without* averaging over the dataset.
+     - LM target (`--target lm`, the default): SAE encode → zero i → decode at
+       resid_post, measure Δ (logit wonderful − logit awful), matching
+       14_mlp_steer but *without* averaging over the dataset.
+     - Probe target (`--target probe`): zero feature i in the probe input,
+       measure Δ logit = f(x with i zeroed) − f(x). Same target function
+       DeepSHAP explains, so it isolates ranking quality from the SAE round trip.
 6. Per sentence, Spearman-correlate |φ(x)| vs |Δ(x,·)| and |Φ| vs |Δ(x,·)|.
 7. Summarize mean ρ_local vs mean ρ_global across sentences.
 
@@ -62,6 +63,7 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from utils import (
+    CANONICAL_SEED,
     checkpoint_path,
     eval_sentences,
     load_eval_and_background,
@@ -84,11 +86,13 @@ _steer14 = _load("mlp_steer14", _SRC / "global_mlp" / "14_mlp_steer.py")
 
 
 LAYER = 7
-N_EXAMPLES = 80
+# Matched to local/9_local_steer.py and local/14_local_mlp_steer.py so all three
+# local scripts describe the same examples with the same candidate-set size.
+N_EXAMPLES = 100
 N_BACKGROUND = 100
-K_LOCAL = 10
-K_GLOBAL = 10
-SEED = 42
+K_LOCAL = 20
+K_GLOBAL = 20
+SEED = CANONICAL_SEED
 # "probe": ablate in MLP input (matches DeepSHAP's f). "lm": SAE edit + logit-diff.
 TARGET = "lm"
 CHECKPOINT = checkpoint_path("mlp_probe_layer_7.joblib")
@@ -321,7 +325,13 @@ def main(
     finite = np.isfinite(rho_local_arr) & np.isfinite(rho_global_arr)
     mean_local = float(np.nanmean(rho_local_arr))
     mean_global = float(np.nanmean(rho_global_arr))
-    frac_local_wins = float(np.mean(rho_local_arr[finite] > rho_global_arr[finite]))
+    # `finite` can be empty when every example has <3 candidates; np.mean of an
+    # empty slice would warn and return nan silently.
+    frac_local_wins = (
+        float(np.mean(rho_local_arr[finite] > rho_global_arr[finite]))
+        if finite.any()
+        else float("nan")
+    )
 
     summary = {
         "target": target,

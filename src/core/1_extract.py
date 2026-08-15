@@ -43,7 +43,27 @@ def load_saes():
     return saes
 
 
-def create_splits():
+def create_splits(force: bool = False):
+    """
+    Re-derive the three-way split. **Not part of any pipeline run.**
+
+    `data/three_way_split_indices.json` is committed and every activation tensor
+    was extracted in the row order it defines, so regenerating it decouples every
+    saved activation from its sentence. Two further hazards, both real:
+      - `save_to_disk` below writes to the same directory `load_from_disk` read
+        from, which `datasets` refuses (or corrupts) rather than doing in place.
+      - A different `datasets` version can shuffle `train_test_split` differently
+        for the same seed, so "seed=42" does not by itself pin the split.
+
+    Guarded behind `force=True` so it cannot be reached by running this module.
+    """
+    if not force:
+        raise RuntimeError(
+            "create_splits() would overwrite data/three_way_split_indices.json and "
+            "data/sst2_train, invalidating every extracted activation. The split is "
+            "committed and must not be regenerated. Pass force=True only if you "
+            "intend to start a new dataset lineage from scratch."
+        )
     ds = load_from_disk("data/sst2_train")
     ds_with_id = ds.add_column("original_index", range(len(ds)))
     first_split = ds_with_id.train_test_split(test_size=0.30, seed=42)

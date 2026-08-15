@@ -31,7 +31,13 @@ _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from utils import checkpoint_path, load_model, load_splits, output_path
+from utils import (
+    CANONICAL_SEED,
+    checkpoint_path,
+    load_model,
+    load_splits,
+    output_path,
+)
 
 # --- reuse intervention helpers from 9_steer.py (invalid module name) ---
 _STEER_PATH = Path(__file__).resolve().parent / "9_steer.py"
@@ -266,7 +272,8 @@ def print_scale_report(
 
 def print_pilot_table(rows: list[dict]) -> None:
     header = f"{'α':>8}  {'mean|ΔP|':>10}  {'meanΔP':>10}  {'sat_frac':>8}  {'ok?':>4}"
-    print("\nPilot sweep (pilot features × val subset):")
+    # TRAIN subset, not val — α must not be tuned on data anything is scored on.
+    print("\nPilot sweep (pilot features × train subset):")
     print(header)
     print("-" * len(header))
     for r in rows:
@@ -292,7 +299,17 @@ def main():
     print(f"Candidates (union top-{K_CANDIDATES}): {len(candidates)}")
     print(f"Pilot features (top-|SHAP|): {pilot_features.tolist()}")
 
-    scales = positive_activation_scales(ACTIVATIONS_PATH, candidates)
+    # Scales for the *whole* filtered pool, not just the candidate union. The
+    # steer scripts' --alpha-mode scaled needs a scale for every feature it might
+    # pick (--selection random can draw any of the 75), and a missing one would
+    # silently fall back to the median. Cheap: ~75 memmap column reads.
+    feature_pool = np.load(output_path("3_shap", "shap_feature_indices.npy"))
+    pool_scales = positive_activation_scales(ACTIVATIONS_PATH, feature_pool)
+    scale_of = {int(f): float(s) for f, s in zip(feature_pool, pool_scales)}
+
+    # The α grid stays calibrated on the candidate union, as before, so the
+    # recommended α does not shift with the size of the pool.
+    scales = np.array([scale_of[int(f)] for f in candidates], dtype=np.float64)
     median_scale = float(np.median(scales))
     alpha_grid = build_alpha_grid(median_scale)
     print(f"\nMedian positive-activation scale = {median_scale:.4f}")
@@ -332,7 +349,14 @@ def main():
     # labels — so it needs no held-out data, and tuning it on the split that
     # 9_steer later scores would select the hyperparameter on the eval set.
     n_pilot = min(N_PILOT_EXAMPLES, len(train_ds))
-    pilot_sentences = list(train_ds["sentence"][:n_pilot])
+    # A seeded random draw, not `[:n_pilot]`. The first 200 rows of the split are
+    # deterministic but not representative, and α is being read off their
+    # saturation behaviour.
+    pilot_rows = np.random.default_rng(CANONICAL_SEED).permutation(len(train_ds))[
+        :n_pilot
+    ]
+    all_train_sentences = list(train_ds["sentence"])
+    pilot_sentences = [all_train_sentences[int(i)] for i in pilot_rows]
     pilot_tokens = model.to_tokens(pilot_sentences)
     print(f"\nPilot subset: {n_pilot} train examples × {len(pilot_features)} features")
 
@@ -368,7 +392,10 @@ def main():
     lines.append(f"median_positive_activation_scale = {median_scale:.6f}")
     lines.append(f"median_decoder_norm = {float(np.median(norms)):.6f}")
     lines.append(f"pilot_features = {pilot_features.tolist()}")
-    lines.append(f"n_pilot_examples = {n_pilot} (train split)")
+    lines.append(
+        f"n_pilot_examples = {n_pilot} (train split, seeded draw, "
+        f"seed={CANONICAL_SEED})"
+    )
     lines.append(
         f"criteria: mean|ΔP| >= {MIN_MEAN_ABS_DP}, sat_frac <= {MAX_SATURATION_FRAC}"
     )
@@ -412,6 +439,11 @@ def main():
     )
     np.save(Path(OUT_DIR) / "candidate_scales.npy", scales)
     np.save(Path(OUT_DIR) / "candidate_indices.npy", candidates)
+    np.save(Path(OUT_DIR) / "pilot_row_indices.npy", pilot_rows)
+    # pool_scales / pool_indices are what utils.resolve_steering_alphas consumes
+    # for --alpha-mode scaled. Aligned elementwise; keep them that way.
+    np.save(Path(OUT_DIR) / "pool_scales.npy", pool_scales)
+    np.save(Path(OUT_DIR) / "pool_indices.npy", feature_pool)
     print(f"\nWrote {out_txt}")
 
 

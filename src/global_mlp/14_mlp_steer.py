@@ -9,6 +9,11 @@ Mirrors global_linear/9_steer.py (logit-diff readout, SAE encode→edit→decode
 
 `Probe saliency` is ‖W1[i,:]‖₂ and has no sign, so it appears in the importance
 table only — a magnitude cannot predict the direction of a signed Δ.
+
+CLI kept byte-for-byte in step with global_linear/9_steer.py — matching `--mode`,
+`--selection`, `--alpha`, `--alpha-mode`, `--k` and `--n-eval` is the only way the
+two arms are comparable. See that module's docstring for why `--selection random`
+and `--alpha-mode scaled` are the defaults.
 """
 
 from __future__ import annotations
@@ -31,11 +36,11 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from utils import (
-    checkpoint_path,
     eval_sentences,
     last_real_token_index,
     load_model,
     output_path,
+    resolve_steering_alphas,
     sample_eval_rows,
 )
 
@@ -56,22 +61,6 @@ def expand_to_full(
     full = np.zeros(n_total, dtype=np.float64)
     full[feature_indices] = scores
     return full
-
-
-def compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores):
-    # Scores may be signed; rank by |score| so rank 1 = largest-magnitude attribution.
-    def scores_to_ranks(scores):
-        order = np.argsort(np.abs(scores))[::-1]
-        ranks = np.empty_like(order)
-        ranks[order] = np.arange(1, len(scores) + 1)
-        return ranks
-
-    probe_ranks = scores_to_ranks(probe_scores)
-    ig_ranks = scores_to_ranks(ig_scores)
-    ga_ranks = scores_to_ranks(ga_scores)
-    shap_ranks = scores_to_ranks(shap_scores)
-
-    return probe_ranks, ig_ranks, ga_ranks, shap_ranks
 
 
 def get_shap_candidates(
@@ -148,38 +137,42 @@ def report_faithfulness(
     delta_signed: dict,
     mode: str,
     unsigned_methods: frozenset[str] = frozenset(),
-):
+    header: str = "",
+) -> str:
     """
-    Print importance and directional faithfulness for each ranking method.
+    Importance and directional faithfulness for each ranking method.
 
     `unsigned_methods` are magnitude-only scores (e.g. ‖W1‖₂): they get an
     importance row but are skipped in the directional table, where correlating a
     non-negative score against a signed Δ would be meaningless.
+
+    Returns the rendered table so the caller can write it to disk — these are the
+    headline numbers, and stdout is not a result file.
     """
-    print("Importance faithfulness  (Spearman ρ of |attribution| vs |Δ|):")
+    lines = []
+    if header:
+        lines.append(header)
+    lines.append("Importance faithfulness  (Spearman rho of |attribution| vs |delta|):")
     for name, scores in method_scores_by_name.items():
         rho, p = faithfulness_correlation(scores, delta_abs, importance=True)
-        print(f"  {name:14s}  ρ={rho:.3f}  p={p:.4f}")
+        lines.append(f"  {name:14s}  rho={rho:+.3f}  p={p:.4f}")
 
     oriented = orient_signed_effects(delta_signed, mode)
-    effect_desc = "−Δ" if mode == "ablation" else "Δ"
-    print(
-        f"Directional faithfulness (Spearman ρ of attribution vs {effect_desc}; "
+    effect_desc = "-delta" if mode == "ablation" else "delta"
+    lines.append(
+        f"Directional faithfulness (Spearman rho of attribution vs {effect_desc}; "
         f"positive = faithful under mode={mode}):"
     )
     for name, scores in method_scores_by_name.items():
         if name in unsigned_methods:
-            print(f"  {name:14s}  n/a (magnitude-only score, no direction)")
+            lines.append(f"  {name:14s}  n/a (magnitude-only score, no direction)")
             continue
         rho, p = faithfulness_correlation(scores, oriented, importance=False)
-        print(f"  {name:14s}  ρ={rho:.3f}  p={p:.4f}")
+        lines.append(f"  {name:14s}  rho={rho:+.3f}  p={p:.4f}")
 
-
-def _pad_token_id(model: HookedTransformer) -> int:
-    pad_id = model.tokenizer.pad_token_id
-    if pad_id is None:
-        pad_id = model.tokenizer.eos_token_id
-    return pad_id
+    text = "\n".join(lines) + "\n"
+    print(text)
+    return text
 
 
 def _as_batch(tokens: torch.Tensor, device) -> torch.Tensor:
@@ -194,7 +187,12 @@ def _apply_feature_intervention(
     mode: str,
     steering_alpha: float,
 ) -> torch.Tensor:
-    """Zero or additively steer one feature at every token position on a cloned tensor."""
+    """
+    Zero or additively steer one feature at every token position on a cloned tensor.
+
+    Edits SAE *activation* space (the caller passes `sae.encode(resid_post)` and
+    decodes the result), never probe weights.
+    """
     acts = acts.clone()
     if mode == "ablation":
         acts[..., feature_idx] = 0.0
@@ -254,6 +252,7 @@ def get_model_intervention_effects(
     layer: int = 7,
     mode: str = "steering",
     steering_alpha: float = 2.0,
+    alpha_by_feature: dict[int, float] | None = None,
     pos_token: str = POS_TOKEN,
     neg_token: str = NEG_TOKEN,
     batch_size: int = 32,
@@ -266,6 +265,10 @@ def get_model_intervention_effects(
         Δ = s_intervened - s_baseline
 
     candidate_indices must be *global* SAE feature ids.
+
+    `alpha_by_feature` gives a per-feature alpha (see
+    `utils.resolve_steering_alphas`); when None every feature gets
+    `steering_alpha`. Ignored under mode="ablation".
     """
     if mode not in ("ablation", "steering"):
         raise ValueError(f"Unknown mode={mode!r}; expected 'ablation' or 'steering'")
@@ -304,13 +307,18 @@ def get_model_intervention_effects(
     loop_desc = "Ablating features" if mode == "ablation" else "Steering features"
     for orig_idx in tqdm(candidate_indices, desc=loop_desc):
         idx = int(orig_idx)
+        alpha_i = (
+            steering_alpha
+            if alpha_by_feature is None
+            else float(alpha_by_feature[idx])
+        )
 
         def intervention_hook(
             resid_post,
             hook,
             feature_idx=idx,
             _mode=mode,
-            _steering_alpha=steering_alpha,
+            _steering_alpha=alpha_i,
         ):
             acts = _apply_feature_intervention(
                 sae.encode(resid_post), feature_idx, _mode, _steering_alpha
@@ -329,10 +337,28 @@ def get_model_intervention_effects(
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
+    # Keep this surface identical to global_linear/9_steer.py.
     p.add_argument("--mode", choices=("steering", "ablation"), default="steering")
     p.add_argument("--alpha", type=float, default=0.6723)
+    p.add_argument(
+        "--alpha-mode",
+        choices=("constant", "scaled"),
+        default="scaled",
+        help=(
+            "'scaled' rescales alpha by each feature's own train activation scale "
+            "(from 9.5_tuning); 'constant' adds the same alpha everywhere"
+        ),
+    )
     p.add_argument("--k", type=int, default=20)
-    p.add_argument("--selection", choices=("top", "random"), default="top")
+    p.add_argument(
+        "--selection",
+        choices=("top", "random"),
+        default="random",
+        help=(
+            "'random' = uniform over the filtered set (headline); 'top' = top-k by "
+            "|SHAP|, which range-restricts SHAP and biases its rho downward"
+        ),
+    )
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n-eval", type=int, default=N_STEER_EVAL)
     p.add_argument("--out-dir", type=Path, default=output_path("14_mlp_steer"))
@@ -352,6 +378,21 @@ if __name__ == "__main__":
     ga_scores = np.load(RANKINGS_DIR / "ga_scores.npy")
     probe_scores = np.load(RANKINGS_DIR / "probe_scores.npy")
     shap_scores = np.load(RANKINGS_DIR / "shap_scores.npy")
+
+    # 13_mlp_ranking already asserts its scores and 12_mlp_shap's Phi describe the
+    # same held-out rows; re-check here that the file we are reading is the one
+    # that check ran against, so a partial re-run cannot slip through.
+    _rank_eval_path = RANKINGS_DIR / "eval_indices.npy"
+    if _rank_eval_path.exists():
+        print(
+            f"Rankings scored on {len(np.load(_rank_eval_path))} held-out rows "
+            f"({RANKINGS_DIR.name}/eval_indices.npy)"
+        )
+    else:
+        print(
+            f"WARNING: {_rank_eval_path} missing - cannot confirm which held-out "
+            "rows these scores describe. Re-run 13_mlp_ranking."
+        )
 
     n_filt = len(feature_indices)
     for name, arr in [
@@ -405,6 +446,14 @@ if __name__ == "__main__":
         f"at last non-pad token"
     )
 
+    if MODE == "steering":
+        alpha_by_feature, alpha_desc = resolve_steering_alphas(
+            global_candidates, STEERING_ALPHA, args.alpha_mode
+        )
+        print(f"Steering strength: {alpha_desc}")
+    else:
+        alpha_by_feature, alpha_desc = None, "n/a (ablation zeroes the feature)"
+
     delta_abs, delta_signed = get_model_intervention_effects(
         model,
         sae,
@@ -413,15 +462,12 @@ if __name__ == "__main__":
         layer=7,
         mode=MODE,
         steering_alpha=STEERING_ALPHA,
+        alpha_by_feature=alpha_by_feature,
         pos_token=POS_TOKEN,
         neg_token=NEG_TOKEN,
     )
 
-    label = (
-        "Ablated"
-        if MODE == "ablation"
-        else f"Steered (a_i += {STEERING_ALPHA:+.3g})"
-    )
+    label = "Ablated" if MODE == "ablation" else f"Steered ({alpha_desc})"
     print(f"{label} {len(delta_abs)} features")
     print("Top features by |Δ| (logit wonderful − awful):")
     for idx, delta in sorted(delta_abs.items(), key=lambda x: -x[1])[:10]:
@@ -433,23 +479,52 @@ if __name__ == "__main__":
         "IG": ig_full,
         "GA": ga_full,
     }
-    report_faithfulness(
+    header = (
+        f"MLP arm - faithfulness\n"
+        f"mode={MODE}  selection={SELECTION}  k={K}  seed={SEED}  "
+        f"n_eval={len(steer_eval_idx)}\n"
+        f"alpha: {alpha_desc}\n"
+        + (
+            "NOTE: selection='top' picks candidates by |SHAP|, which restricts "
+            "SHAP's range on the scored set and biases its rho downward relative "
+            "to the other methods.\n"
+            if SELECTION == "top"
+            else ""
+        )
+        + (
+            f"NOTE: rho over n={K} features x 4 methods x 2 correlation types, "
+            "no multiple-comparison control - p-values are descriptive.\n"
+            if K < 30
+            else ""
+        )
+    )
+    faith_text = report_faithfulness(
         method_scores,
         delta_abs,
         delta_signed,
         MODE,
         unsigned_methods=frozenset({"Probe saliency"}),
+        header=header,
     )
 
+    # Config-tagged filenames: these used to be config-independent, so a second
+    # run into the same directory replaced the first run's candidate set.
+    tag = f"{MODE}_{SELECTION}_k{K}"
     out_dir = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     # JSON, not np.save: these are dict[int, float], and np.save would pickle
     # them into a 0-d object array that only reloads with allow_pickle=True.
-    with open(out_dir / f"model_deltas_{MODE}.json", "w") as f:
+    with open(out_dir / f"model_deltas_{tag}.json", "w") as f:
         json.dump(
             {
                 "mode": MODE,
                 "steering_alpha": STEERING_ALPHA,
+                "alpha_mode": args.alpha_mode,
+                "alpha_by_feature": (
+                    {str(k): v for k, v in alpha_by_feature.items()}
+                    if alpha_by_feature
+                    else None
+                ),
                 "selection": SELECTION,
                 "k": K,
                 "seed": SEED,
@@ -460,7 +535,8 @@ if __name__ == "__main__":
             f,
             indent=2,
         )
-    np.save(out_dir / "shap_top_local.npy", local_top)
-    np.save(out_dir / "shap_top_global.npy", global_candidates)
-    np.save(out_dir / "eval_indices.npy", steer_eval_idx)
-    print(f"\nWrote outputs → {out_dir}/")
+    (out_dir / f"faithfulness_{tag}.txt").write_text(faith_text)
+    np.save(out_dir / f"shap_top_local_{tag}.npy", local_top)
+    np.save(out_dir / f"shap_top_global_{tag}.npy", global_candidates)
+    np.save(out_dir / f"eval_indices_{tag}.npy", steer_eval_idx)
+    print(f"\nWrote outputs → {out_dir}/  (tag: {tag})")

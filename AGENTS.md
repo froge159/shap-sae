@@ -147,14 +147,38 @@ Select L1 via `l1_ratio=1`, **not** `penalty="l1"` — scikit-learn deprecated
 sparsity is load-bearing: the mask is `(coef != 0) & frequent_enough`, so an L2
 fit (~12k non-zero vs ~1.4k) quietly turns the sparsity filter into a no-op.
 
-**Attribution targets differ by script — magnitudes are not interchangeable:**
+**Always pass `random_state=CANONICAL_SEED` to `LogisticRegression`.** sklearn
+hands it to liblinear to seed the coordinate-descent data shuffling; at `None`
+the seed comes from the global NumPy RNG and the fit drifts between runs. For the
+L1 probe that drift moves the exactly-zero coefficients, which re-rolls the
+75-feature mask that gates the MLP probe's inputs, the steering candidate pool
+and the group-steering ranking pool. This applies to all three fits in the repo:
+`core/2_probes`, `9_steer.train_residual_probe`, `10_simplicity_check`'s lexicon.
 
-| Script | Explainer | Target function | Aggregation |
+**Every method explains the same target within an arm.** This is the one rule
+that makes the IG-vs-SHAP comparison mean anything:
+
+| Arm | Explainer | Target function | IG / GA gradient |
 |---|---|---|---|
-| `global_linear/7_shap_recompute` | LinearSHAP (exact) | log-odds margin | mean signed φ |
-| `global_mlp/12_mlp_shap` | DeepSHAP | pre-sigmoid logit | mean signed φ |
+| `global_linear` (7, 8) | LinearSHAP (exact) | log-odds margin `w·x + b` | ∇(margin) = `coef_` |
+| `global_mlp` (12, 13) | DeepSHAP | pre-sigmoid logit | ∇(logit), `mlp_logit_grad` |
 
-Rank correlations survive the monotone links between these; effect sizes do not.
+**Never reintroduce a `σ(1−σ)` factor into IG/GA.** It makes them attribute
+`σ(logit)` while SHAP attributes the logit. Per example that factor is a positive
+scalar and changes no ranking — but every method here averages over examples
+first, and `mean_e[c_e · v_e]` is not a monotone function of `mean_e[v_e]`, so
+the averaged scores are genuinely different quantities. The old near-zero
+IG-vs-SHAP ρ was substantially this artifact.
+
+Consequence worth knowing before reading `8_rankings_recompute/correlation.txt`:
+with the target matched, **IG, GA and interventional SHAP are analytically
+identical for a linear probe** — all three are `w_j · (x_j − μ_j)`. The linear
+arm's rank agreement is therefore an identity (ρ = 1.000), not evidence;
+`8_feature_ranking.linearity_identity_report` asserts it and writes the residual
+into `correlation.txt`. The substantive method comparison lives in the **MLP
+arm**, where the ReLU keeps IG genuinely distinct from SHAP.
+
+Magnitudes are still not interchangeable *across* arms (log-odds vs logit).
 `core/3_shap_comp` no longer computes an attribution — it only saves the
 filtered feature mask (`shap_feature_indices.npy`) that other scripts load.
 It used to also run KernelSHAP; that had no downstream readers and was removed.
@@ -172,6 +196,32 @@ raw numbers. Every directional report passes Δ through `orient_signed_effects`
 first, so **positive always means faithful**. Do not compare a directional ρ
 across modes without checking it was oriented.
 
+**Steering α is per-feature.** `utils.resolve_steering_alphas` is the single
+definition, shared by all four steer scripts. `--alpha-mode scaled` (the default)
+sets `α_i = α · scale_i / median(scale)` from the train activation scales
+`9.5_tuning` writes to `pool_scales.npy` / `pool_indices.npy`; `constant` adds a
+flat α everywhere. Constant is what the original runs used and it confounds the
+`|attribution| vs |Δ|` correlation: features differ severalfold in natural
+activation scale, so a flat α pushes some far harder relative to themselves than
+others, and |Δ| partly ranks that instead of the attribution. No decoder-norm
+correction is applied and none is needed — this SAE's `W_dec` rows are ~unit norm
+(median 0.9996). Report `scaled` as primary and `constant` as a robustness check.
+
+**Candidate selection biases the faithfulness table.** `--selection top` picks
+the k candidates by |SHAP| and then scores all four methods on them, which
+range-restricts SHAP alone and deflates its ρ relative to methods that did not
+drive selection. `--selection random` is the default and the headline; run `top`
+only as a labelled secondary. (`9.5_tuning` uses the union of every method's
+top-k, which is the other unbiased option.)
+
+**Magnitude-only scores never become steering vectors.** `group_steering` builds
+`v = Σ score_i · W_dec[i]`, using the score as a *signed* weight, so the MLP arm's
+`probe` score (‖W1[i,:]‖₂, non-negative) is **excluded** from that script — it
+would add positive- and negative-sentiment decoder directions with the same sign.
+The logistic arm keeps its `probe` vector because `coef_[0]` is signed. The
+`actdiff` baseline uses no probe, so it is scored once under the internal
+`SHARED_ARM` and fanned out to both arms with `arm_independent: true`.
+
 **Magnitude-only scores:** the MLP arm's `probe_saliency` is ‖W1[i,:]‖₂ and has no
 sign. It appears in importance tables only; correlating it against a signed Δ, or
 against signed IG/GA/SHAP, compares a magnitude with a direction.
@@ -182,7 +232,8 @@ against signed IG/GA/SHAP, compares a magnitude with a direction.
 ## What Not to Do
 
 - Do not modify `data/sst2_train` or `data/three_way_split_indices.json`, and do not
-  re-download the dataset with a different seed
+  re-download the dataset with a different seed. `1_extract.create_splits()` would
+  do exactly that; it is guarded behind `force=True` and is not part of any run
 - Do not run SHAP on the probe val split — only on the held-out split
 - Do not fit, tune, or select anything on the held-out split (steering α included)
 - Do not load splits from the Hub — use `utils.load_splits`, which reads from disk;
@@ -190,8 +241,18 @@ against signed IG/GA/SHAP, compares a magnitude with a direction.
   decouple sentences from their activations
 - Do not compare attribution methods scored on different rows or with different
   baselines — IG/GA must use the same eval rows and the same background mean as SHAP.
-  Each output dir carries an `eval_indices.npy` for exactly this check; scripts that
-  combine two artifacts assert the indices match
+  Each output dir carries an `eval_indices.npy` for exactly this check, and every
+  script that combines two artifact directories asserts they match:
+  `8_feature_ranking`, `9_steer`, `13_mlp_ranking` and `group_steering`. Keep that
+  guard when adding a consumer. Mind the two filename spellings — `7_shap_recompute`
+  and `12_mlp_shap` write `eval_indices_layer7.npy`, `8` and `13` write
+  `eval_indices.npy`
+- Do not assume same-named `.npy` files share an index space. `ig_scores.npy` /
+  `ga_scores.npy` are full-width (32768) under `8_rankings_recompute/` and
+  filtered-width (75) under `13_mlp_ranking/`. Consumers assert the width they
+  expect; keep those asserts. `shap_feature_indices.npy` is always the 75-entry
+  mask — the full-width column list `7_shap_recompute` explains is deliberately
+  named `explained_feature_indices.npy` so the two cannot be confused
 - Do not rank-correlate attribution methods over the full 32768 features. The L1
   probe zeroes ~77% of them and IG/GA/Φ are *identically* zero there, so Spearman
   reports agreement about exclusion, not about importance (it inflated Probe-vs-GA
@@ -230,11 +291,28 @@ they are not bugs to fix silently.
   feature at every position. Some of any faithfulness gap is this mismatch.
 - **The faithfulness ρ are small-n.** Default `--k 20` means 20 features across
   4 methods × 2 correlation types, with no multiple-comparison control. Individual
-  p-values are descriptive.
+  p-values are descriptive. The rendered table is saved as
+  `faithfulness_{mode}_{selection}_k{k}.txt` beside the deltas JSON — it used to
+  be printed to stdout only, so a finished run left no record of its own result.
+- **Steer outputs are config-tagged.** `model_deltas_`, `faithfulness_`,
+  `shap_top_local_`, `shap_top_global_` and `eval_indices_` all carry a
+  `{mode}_{selection}_k{k}` suffix. Before that, a second run into the same
+  directory replaced the candidate set the first run's JSON referred to.
+- **Group steering is on a different scale from per-feature steering.**
+  `group_steering` never touches the SAE at inference, so its baseline is a clean
+  forward, while `9_steer` / `14_mlp_steer` baseline through an encode→decode
+  reconstruction. Both are internally consistent; compare the *shapes* of the
+  effect-vs-cost curves across the two families, never the effect sizes.
 - **Match the arms before comparing them.** `--mode`, `--selection`, `--k`,
-  `--alpha` and `--n-eval` are CLI flags on the steer scripts precisely so the
-  linear and MLP arms can be run identically; they used to be module constants
-  that had drifted apart (global on `steering`/`random`, local on `ablation`).
+  `--alpha`, `--alpha-mode` and `--n-eval` are CLI flags on the steer scripts
+  precisely so the linear and MLP arms can be run identically; they used to be
+  module constants that had drifted apart. The **three local scripts** now carry
+  the same surface (`--mode --k-local --k-global --n-examples --alpha
+  --alpha-mode --out-dir`) with matched defaults `k_local = k_global = 20`,
+  `n_examples = 100`; they had drifted to k=10 (linear) vs k=20 (MLP) vs k=10,
+  n=80 (`local_shap_faithfulness`), which changes the union size and the
+  per-example Spearman n, so the local arms were not comparable at all. Pass the
+  same flags to both arms or the comparison is void.
 - **The last-token fix invalidates cached artifacts.** Anything under
   `activations/` produced before it describes the second-to-last token. Re-run
   `1_extract.py` and the full chain before quoting new numbers.

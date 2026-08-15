@@ -1,3 +1,30 @@
+"""
+IG / GA / probe-weight / SHAP rank agreement for the linear (logistic) SAE probe.
+
+**Attribution target.** Every method here explains the **log-odds margin**
+`w·x + b` — the same function `7_shap_recompute.py`'s LinearExplainer explains.
+IG and GA used to multiply the gradient by `σ'(logit) = σ(1−σ)`, i.e. they
+attributed `σ(w·x + b)` while SHAP attributed the margin. That mismatch is not
+harmless. Per example σ' is a positive scalar, so it leaves the within-example
+ranking alone — but all three methods *average over examples* before anything is
+correlated, and
+
+    Φ_j  = w_j · mean_e[ x_ej − μ_j ]
+    IG_j = w_j · mean_e[ c_e · (x_ej − μ_j) ]      c_e = per-example σ' path average
+
+are different weighted means of the same quantity, related by no monotone map.
+The near-zero historical IG-vs-SHAP ρ was largely that reweighting, not a
+property of the methods.
+
+**Consequence, stated plainly:** with the target matched, IG, GA and
+interventional SHAP are *analytically identical* for a linear probe — all three
+collapse to `w_j · (x_j − μ_j)`. So this script is a closed-form sanity check
+(expect ρ = 1.000 and max|IG − Φ| ≈ 0), not an empirical comparison. The real
+method comparison lives in the MLP arm (`global_mlp/13_mlp_ranking.py`), where
+the ReLU makes IG ≠ SHAP genuinely. `main` asserts the identity and writes it
+into `correlation.txt`; if it ever fails, something upstream drifted.
+"""
+
 import os
 import sys
 from pathlib import Path
@@ -21,32 +48,28 @@ def integrated_gradients(
     n_steps: int = 50,
 ) -> np.ndarray:
     """
-    Returns mean signed IG attributions, shape (n_features,).
+    Returns mean signed IG attributions on the **log-odds margin**, shape (n_features,).
 
-    Accumulates a running sum rather than stacking per-example attributions:
-    at full SAE width the stacked array is n x 32768 float64.
+    The margin's gradient is the constant `coef_`, so the path integral
+    `∫₀¹ ∇f(baseline + α(x − baseline)) dα` collapses to `coef_` exactly and IG
+    reduces to `(x − baseline) · w`. Computing it in closed form rather than
+    running an n_steps Riemann sum of a constant is the same number without the
+    2000 × 50 × 32768 of arithmetic — `n_steps` is kept in the signature only so
+    the call sites stay uniform with the MLP arm, where the path integral is real.
+
+    Do NOT reintroduce a `σ(1−σ)` factor here: that attributes `σ(margin)`, which
+    is a different target function from the one 7_shap_recompute explains. See
+    the module docstring.
     """
-    alphas = np.linspace(0, 1, n_steps)                # (n_steps,)
-    ig_sum = np.zeros_like(baseline, dtype=np.float64)
+    del n_steps  # constant gradient ⇒ the path integral is exact in closed form
+
+    w = np.asarray(probe.coef_[0], dtype=np.float64)
+    attr_sum = np.zeros_like(baseline, dtype=np.float64)
 
     for x in tqdm(activations, total=len(activations), desc="Calculating IG", dynamic_ncols=True):
-        # Interpolate from baseline to input
-        interpolated = baseline + alphas[:, None] * (x - baseline)  # (n_steps, F)
+        attr_sum += (x - baseline) * w
 
-        # Gradient at each interpolated point
-        # For logistic regression: grad = w * sigmoid(Wx+b) * (1 - sigmoid(Wx+b))
-        logits = interpolated @ probe.coef_[0] + probe.intercept_[0]  # (n_steps,)
-        sig = 1 / (1 + np.exp(-logits))               # (n_steps,)
-        grad_scalar = sig * (1 - sig)                  # (n_steps,)
-
-        # Full gradient: outer product of scalar with weights
-        grads = grad_scalar[:, None] * probe.coef_[0]  # (n_steps, F)
-
-        # Integrate (trapezoidal rule) and multiply by (x - baseline)
-        avg_grads = np.trapezoid(grads, alphas, axis=0)    # (F,)
-        ig_sum += (x - baseline) * avg_grads
-
-    return ig_sum / len(activations)
+    return attr_sum / len(activations)
 
 
 def gradient_attribution(
@@ -55,37 +78,65 @@ def gradient_attribution(
     baseline: np.ndarray,         # shape (n_features,)
 ) -> np.ndarray:
     """
-    Returns mean signed gradient x (input - baseline) attributions.
+    Returns mean signed gradient × (input − baseline) attributions on the margin.
 
     Uses the same baseline as IG. Plain `x * grad` (implicit zero baseline)
     disagrees with mean-baseline IG on sparse SAE features (~87% zeros):
-    when x=0, GA is 0 but IG is -baseline . avg_grad.
+    when x=0, GA is 0 but IG is −baseline · grad.
+
+    On the margin the gradient is input-independent, so GA and IG coincide here
+    by construction. Kept as a separate function because it does not coincide in
+    the MLP arm, and because the two are conceptually distinct methods.
     """
+    w = np.asarray(probe.coef_[0], dtype=np.float64)
     attr_sum = np.zeros_like(baseline, dtype=np.float64)
 
     for x in tqdm(activations, total=len(activations), desc="Calculating gradients", dynamic_ncols=True):
-        logit = x @ probe.coef_[0] + probe.intercept_[0]
-        sig = 1 / (1 + np.exp(-logit))
-        grad = sig * (1 - sig) * probe.coef_[0]   # (n_features,)
-        attr_sum += (x - baseline) * grad
+        attr_sum += (x - baseline) * w
 
     return attr_sum / len(activations)
 
-def compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores):
-    """Signed scores → ranks (rank 1 = most positive). Monotone, so Spearman is
-    unchanged by this step; it exists only for readable per-feature tables."""
-    def scores_to_ranks(scores):
-        order = np.argsort(scores)[::-1]
-        ranks = np.empty_like(order)
-        ranks[order] = np.arange(1, len(scores) + 1)
-        return ranks
 
-    probe_ranks = scores_to_ranks(probe_scores)
-    ig_ranks    = scores_to_ranks(ig_scores)
-    ga_ranks    = scores_to_ranks(ga_scores)
-    shap_ranks  = scores_to_ranks(shap_scores)
+def linearity_identity_report(
+    ig_scores: np.ndarray,
+    ga_scores: np.ndarray,
+    shap_scores: np.ndarray,
+    support: np.ndarray,
+    rtol: float = 1e-5,
+) -> str:
+    """
+    Check the closed-form identity IG = GA = Φ over the scored support.
 
-    return probe_ranks, ig_ranks, ga_ranks, shap_ranks
+    All three equal `w_j · mean_e[x_ej − μ_j]` for a linear probe explained on the
+    margin, so a non-zero gap means a target mismatch has crept back in (or that
+    Φ and IG/GA were scored on different rows, which `main` also guards).
+
+    The tolerance is *relative* and sized for float32: activations are stored as
+    float32 and `shap` accumulates in float32, so the identity lands around 1e-7
+    relative, not at machine zero. `rtol=1e-5` is still four orders tighter than
+    any real mismatch — reintroducing the σ' reweighting moves this to O(1).
+    """
+    d_ig = float(np.max(np.abs(ig_scores[support] - shap_scores[support])))
+    d_ga = float(np.max(np.abs(ga_scores[support] - shap_scores[support])))
+    scale = float(np.max(np.abs(shap_scores[support]))) or 1.0
+
+    lines = [
+        "Closed-form identity check (linear probe, margin target):",
+        f"  max|IG - Phi| = {d_ig:.3e}   (relative {d_ig / scale:.3e})",
+        f"  max|GA - Phi| = {d_ga:.3e}   (relative {d_ga / scale:.3e})",
+        f"  rtol          = {rtol:.1e}   (float32 accumulation floors this near 1e-7)",
+    ]
+    ok = d_ig <= rtol * scale and d_ga <= rtol * scale
+    lines.append(
+        "  PASS - IG, GA and SHAP coincide analytically, as they must for a "
+        "linear probe. The rank agreement below is an identity, not evidence."
+        if ok
+        else "  FAIL - the three methods no longer coincide; a target mismatch or "
+        "a row mismatch has been reintroduced. Do not quote the correlations."
+    )
+    for line in lines:
+        print(line)
+    return "\n".join(lines) + "\n"
 
 
 def scored_support(probe_scores: np.ndarray) -> np.ndarray:
@@ -149,8 +200,10 @@ if __name__ == "__main__":
     LAYER = 7
     OUT_DIR = output_path("8_rankings_recompute")
 
+    SHAP_DIR = output_path("7_shap_recompute")
+
     probe = joblib.load(checkpoint_path(f"probe_layer_{LAYER}.joblib"))
-    Phi = np.load(output_path("7_shap_recompute", "phi_sentiment_layer7_signed.npy"))
+    Phi = np.load(SHAP_DIR / "phi_sentiment_layer7_signed.npy")
 
     # Same held-out rows Phi was computed on, and the mean of the same train
     # background SHAP marginalised over -- the single-point analogue of SHAP's
@@ -161,6 +214,33 @@ if __name__ == "__main__":
         f"IG/GA over {len(shap_eval)} held-out rows, "
         f"baseline = mean of {len(background)} train background rows"
     )
+
+    # Phi and IG/GA must describe the *same* rows and the *same* background, or
+    # the comparisons below confound attribution method with choice of data. The
+    # MLP arm has always checked this (13_mlp_ranking); the linear arm did not.
+    shap_eval_indices_path = SHAP_DIR / f"eval_indices_layer{LAYER}.npy"
+    shap_bg_indices_path = SHAP_DIR / f"background_indices_layer{LAYER}.npy"
+    if shap_eval_indices_path.exists():
+        shap_eval_idx = np.load(shap_eval_indices_path)
+        if not np.array_equal(eval_idx, shap_eval_idx):
+            raise ValueError(
+                f"Row mismatch: IG/GA scored on {len(eval_idx)} held-out rows but "
+                f"{SHAP_DIR}/ holds Phi for {len(shap_eval_idx)} rows. "
+                f"Re-run 7_shap_recompute with n_shap={len(eval_idx)}."
+            )
+        shap_bg_idx = np.load(shap_bg_indices_path)
+        if not np.array_equal(bg_idx, shap_bg_idx):
+            raise ValueError(
+                f"Background mismatch: IG/GA baseline is the mean of "
+                f"{len(bg_idx)} train rows but {SHAP_DIR}/ marginalised over "
+                f"{len(shap_bg_idx)} different rows."
+            )
+        print(f"  eval/background rows match {SHAP_DIR}/")
+    else:
+        print(
+            f"WARNING: {shap_eval_indices_path} missing - cannot verify that Phi "
+            "and IG/GA describe the same held-out rows. Re-run 7_shap_recompute."
+        )
 
     # Feature ranking
     ig_scores, ga_scores, probe_scores, shap_scores = feature_ranking(
@@ -175,11 +255,16 @@ if __name__ == "__main__":
     np.save(OUT_DIR / "background_indices.npy", bg_idx)
 
     support = scored_support(probe_scores)
+    print()
+    identity_text = linearity_identity_report(
+        ig_scores, ga_scores, shap_scores, support
+    )
+
     print(
         f"\nRank agreement over the {len(support)} features with a non-zero probe "
         f"weight (of {len(probe_scores)}):"
     )
-    text = compare_rankings(probe_scores, ig_scores, shap_scores, ga_scores, support)
-    (OUT_DIR / "correlation.txt").write_text(text)
+    corr_text = compare_rankings(probe_scores, ig_scores, shap_scores, ga_scores, support)
+    (OUT_DIR / "correlation.txt").write_text(identity_text + "\n" + corr_text)
     np.save(OUT_DIR / "support.npy", support)
     print(f"\nWrote outputs → {OUT_DIR}/")

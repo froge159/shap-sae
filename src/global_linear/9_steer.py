@@ -10,6 +10,19 @@ Two mismatches to keep in mind when reading the numbers:
     `_apply_feature_intervention` edits the feature at *every* token position.
   - `--alpha` comes from 9.5_tuning, which calibrated it against a layer-11
     residual-probe probability, not against this logit-diff scale.
+
+Two flags exist because the defaults were quietly biasing the result:
+  - `--selection`: `top` picks candidates by |SHAP|, then scores all four methods
+    on them. That restricts SHAP's range on the scored set while leaving the
+    others unrestricted, which deflates SHAP's rho relative to methods that did
+    not drive selection. Prefer `random` for the headline number.
+  - `--alpha-mode`: `constant` adds the same alpha to every feature regardless of
+    its natural activation scale, so |delta| partly tracks how hard each feature
+    was pushed relative to itself. `scaled` equalises that. See
+    `utils.resolve_steering_alphas`.
+
+Outputs are suffixed with `{mode}_{selection}_k{k}` so that two configurations
+written to one directory cannot silently overwrite each other's candidate sets.
 """
 
 from __future__ import annotations
@@ -34,11 +47,13 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from utils import (
+    CANONICAL_SEED,
     checkpoint_path,
     eval_sentences,
     last_real_token_index,
     load_model,
     output_path,
+    resolve_steering_alphas,
     sample_eval_rows,
 )
 
@@ -46,22 +61,6 @@ from utils import (
 # not on val. Nesting makes these the first N_STEER_EVAL rows of the set
 # 7_shap_recompute / 8_feature_ranking scored.
 N_STEER_EVAL = 1000
-
-
-def compile_rankings(ig_scores, probe_scores, ga_scores, shap_scores):
-    # Scores are signed; rank by |score| so rank 1 = largest-magnitude attribution.
-    def scores_to_ranks(scores):
-        order = np.argsort(np.abs(scores))[::-1]
-        ranks = np.empty_like(order)
-        ranks[order] = np.arange(1, len(scores) + 1)
-        return ranks
-
-    probe_ranks = scores_to_ranks(probe_scores)
-    ig_ranks = scores_to_ranks(ig_scores)
-    ga_ranks = scores_to_ranks(ga_scores)
-    shap_ranks = scores_to_ranks(shap_scores)
-
-    return probe_ranks, ig_ranks, ga_ranks, shap_ranks
 
 
 def get_shap_candidates(
@@ -135,30 +134,40 @@ def orient_signed_effects(delta_signed: dict, mode: str) -> dict:
 
 
 def report_faithfulness(
-    method_scores_by_name: dict, delta_abs: dict, delta_signed: dict, mode: str
-):
-    """Print importance and directional faithfulness for each ranking method."""
-    print("Importance faithfulness  (Spearman ρ of |attribution| vs |Δ|):")
+    method_scores_by_name: dict,
+    delta_abs: dict,
+    delta_signed: dict,
+    mode: str,
+    header: str = "",
+) -> str:
+    """
+    Importance and directional faithfulness for each ranking method.
+
+    Returns the rendered table so the caller can write it to disk. These are the
+    headline numbers of the whole comparison; printing them to stdout only (as
+    this used to) meant a completed run left no record of its own result.
+    """
+    lines = []
+    if header:
+        lines.append(header)
+    lines.append("Importance faithfulness  (Spearman rho of |attribution| vs |delta|):")
     for name, scores in method_scores_by_name.items():
         rho, p = faithfulness_correlation(scores, delta_abs, importance=True)
-        print(f"  {name:14s}  ρ={rho:.3f}  p={p:.4f}")
+        lines.append(f"  {name:14s}  rho={rho:+.3f}  p={p:.4f}")
 
     oriented = orient_signed_effects(delta_signed, mode)
-    effect_desc = "−Δ" if mode == "ablation" else "Δ"
-    print(
-        f"Directional faithfulness (Spearman ρ of attribution vs {effect_desc}; "
+    effect_desc = "-delta" if mode == "ablation" else "delta"
+    lines.append(
+        f"Directional faithfulness (Spearman rho of attribution vs {effect_desc}; "
         f"positive = faithful under mode={mode}):"
     )
     for name, scores in method_scores_by_name.items():
         rho, p = faithfulness_correlation(scores, oriented, importance=False)
-        print(f"  {name:14s}  ρ={rho:.3f}  p={p:.4f}")
+        lines.append(f"  {name:14s}  rho={rho:+.3f}  p={p:.4f}")
 
-
-def _pad_token_id(model: HookedTransformer) -> int:
-    pad_id = model.tokenizer.pad_token_id
-    if pad_id is None:
-        pad_id = model.tokenizer.eos_token_id
-    return pad_id
+    text = "\n".join(lines) + "\n"
+    print(text)
+    return text
 
 
 def pool_last_non_pad_token(
@@ -238,7 +247,15 @@ def train_residual_probe(
 ) -> LogisticRegression:
     """Train a logistic probe on last-token residual stream at `layer`."""
     X = collect_last_token_residuals(model, tokens_list, layer)
-    probe = LogisticRegression(max_iter=1000, C=1.0, solver="liblinear", verbose=0)
+    # random_state pins liblinear's internal data shuffling; without it the fit
+    # (and so the alpha 9.5_tuning recommends) drifts between runs.
+    probe = LogisticRegression(
+        max_iter=1000,
+        C=1.0,
+        solver="liblinear",
+        random_state=CANONICAL_SEED,
+        verbose=0,
+    )
     probe.fit(X, labels)
     if ckpt_path is not None:
         Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
@@ -266,7 +283,12 @@ def _apply_feature_intervention(
     mode: str,
     steering_alpha: float,
 ) -> torch.Tensor:
-    """Zero or additively steer one feature at every token position on a cloned tensor."""
+    """
+    Zero or additively steer one feature at every token position on a cloned tensor.
+
+    Edits SAE *activation* space (the caller passes `sae.encode(resid_post)` and
+    decodes the result), never probe weights.
+    """
     acts = acts.clone()
     if mode == "ablation":
         acts[..., feature_idx] = 0.0
@@ -328,6 +350,7 @@ def get_model_intervention_effects(
     layer: int = 7,
     mode: str = "steering",
     steering_alpha: float = 2.0,
+    alpha_by_feature: dict[int, float] | None = None,
     pos_token: str = POS_TOKEN,
     neg_token: str = NEG_TOKEN,
     batch_size: int = 32,
@@ -341,8 +364,12 @@ def get_model_intervention_effects(
     with default tokens " wonderful" / " awful".
 
     mode="ablation": encode → zero feature → decode into resid_post.
-    mode="steering": encode → a_i += steering_alpha (signed, additive) at every
+    mode="steering": encode → a_i += alpha_i (signed, additive) at every
     token position → decode.
+
+    `alpha_by_feature` gives a per-feature alpha (see
+    `utils.resolve_steering_alphas`); when None every feature gets
+    `steering_alpha`. Ignored under mode="ablation", which has no magnitude.
 
     Returns
     -------
@@ -392,13 +419,18 @@ def get_model_intervention_effects(
     loop_desc = "Ablating features" if mode == "ablation" else "Steering features"
     for orig_idx in tqdm(candidate_indices, desc=loop_desc):
         idx = int(orig_idx)
+        alpha_i = (
+            steering_alpha
+            if alpha_by_feature is None
+            else float(alpha_by_feature[idx])
+        )
 
         def intervention_hook(
             resid_post,
             hook,
             feature_idx=idx,
             _mode=mode,
-            _steering_alpha=steering_alpha,
+            _steering_alpha=alpha_i,
         ):
             acts = _apply_feature_intervention(
                 sae.encode(resid_post), feature_idx, _mode, _steering_alpha
@@ -415,56 +447,6 @@ def get_model_intervention_effects(
     return delta_abs, delta_signed
 
 
-def get_model_ablation_effects(
-    model: HookedTransformer,
-    sae: SAE,
-    tokens_list,
-    candidate_indices: np.ndarray,
-    layer: int = 7,
-    pos_token: str = POS_TOKEN,
-    neg_token: str = NEG_TOKEN,
-    batch_size: int = 32,
-) -> tuple[dict, dict]:
-    """Ablate SAE features (zero activations). Thin wrapper around intervention API."""
-    return get_model_intervention_effects(
-        model,
-        sae,
-        tokens_list,
-        candidate_indices,
-        layer=layer,
-        mode="ablation",
-        pos_token=pos_token,
-        neg_token=neg_token,
-        batch_size=batch_size,
-    )
-
-
-def get_model_steering_effects(
-    model: HookedTransformer,
-    sae: SAE,
-    tokens_list,
-    candidate_indices: np.ndarray,
-    layer: int = 7,
-    steering_alpha: float = 2.0,
-    pos_token: str = POS_TOKEN,
-    neg_token: str = NEG_TOKEN,
-    batch_size: int = 32,
-) -> tuple[dict, dict]:
-    """Additively steer each selected feature: a_i ← a_i + α (α may be signed)."""
-    return get_model_intervention_effects(
-        model,
-        sae,
-        tokens_list,
-        candidate_indices,
-        layer=layer,
-        mode="steering",
-        steering_alpha=steering_alpha,
-        pos_token=pos_token,
-        neg_token=neg_token,
-        batch_size=batch_size,
-    )
-
-
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--mode", choices=("steering", "ablation"), default="steering")
@@ -474,12 +456,26 @@ def parse_args() -> argparse.Namespace:
         default=0.6723,
         help="Signed additive steering strength: a_i <- a_i + alpha",
     )
+    p.add_argument(
+        "--alpha-mode",
+        choices=("constant", "scaled"),
+        default="scaled",
+        help=(
+            "'scaled' rescales alpha by each feature's own train activation scale "
+            "(from 9.5_tuning) so every feature gets a comparable relative nudge; "
+            "'constant' adds the same alpha everywhere (what the original runs did)"
+        ),
+    )
     p.add_argument("--k", type=int, default=20, help="Candidate features")
     p.add_argument(
         "--selection",
         choices=("top", "random"),
-        default="top",
-        help="'top' = top-k by |SHAP|; 'random' = uniform over the filtered set",
+        default="random",
+        help=(
+            "'random' = uniform over the filtered set (headline; unbiased); "
+            "'top' = top-k by |SHAP|, which range-restricts SHAP on the scored "
+            "set and deflates its rho relative to the other methods"
+        ),
     )
     p.add_argument("--seed", type=int, default=0, help="Seed for --selection random")
     p.add_argument(
@@ -502,15 +498,43 @@ if __name__ == "__main__":
 
     # Full-width signed attributions; candidates restricted to the SHAP-filtered
     # feature set (3_shap); no union across methods.
+    SHAP_DIR = output_path("7_shap_recompute")
+    RANK_DIR = output_path("8_rankings_recompute")
+
     feature_indices = np.load(output_path("3_shap", "shap_feature_indices.npy"))
     sae_probe = joblib.load(checkpoint_path("probe_layer_7.joblib"))
 
     probe_scores = sae_probe.coef_[0]
-    ig_scores = np.load(output_path("8_rankings_recompute", "ig_scores.npy"))
-    ga_scores = np.load(output_path("8_rankings_recompute", "ga_scores.npy"))
-    shap_scores = np.load(
-        output_path("7_shap_recompute", "phi_sentiment_layer7_signed.npy")
-    )
+    ig_scores = np.load(RANK_DIR / "ig_scores.npy")
+    ga_scores = np.load(RANK_DIR / "ga_scores.npy")
+    shap_scores = np.load(SHAP_DIR / "phi_sentiment_layer7_signed.npy")
+
+    # The four score vectors have to describe the same held-out rows, or the
+    # faithfulness table below ranks methods partly by which data they saw.
+    _shap_eval_path = SHAP_DIR / "eval_indices_layer7.npy"
+    _rank_eval_path = RANK_DIR / "eval_indices.npy"
+    if _shap_eval_path.exists() and _rank_eval_path.exists():
+        if not np.array_equal(np.load(_shap_eval_path), np.load(_rank_eval_path)):
+            raise ValueError(
+                f"Row mismatch between {SHAP_DIR}/ and {RANK_DIR}/: SHAP and IG/GA "
+                "were scored on different held-out rows. Re-run 7_shap_recompute "
+                "and 8_feature_ranking against the same n_eval."
+            )
+        print(f"Attribution rows match across {SHAP_DIR.name}/ and {RANK_DIR.name}/")
+    else:
+        print(
+            "WARNING: eval_indices missing from 7_shap_recompute/ or "
+            "8_rankings_recompute/ - cannot verify SHAP and IG/GA describe the "
+            "same rows. Re-run both."
+        )
+
+    for _name, _arr in (("ig", ig_scores), ("ga", ga_scores), ("shap", shap_scores)):
+        if _arr.shape != probe_scores.shape:
+            raise ValueError(
+                f"{_name}_scores shape {_arr.shape} != full SAE width "
+                f"{probe_scores.shape}; these must be full-width vectors indexed "
+                "by global SAE id."
+            )
 
     shap_filtered = shap_scores[feature_indices]
     local_top, global_candidates = get_shap_candidates(
@@ -547,6 +571,14 @@ if __name__ == "__main__":
         f"at last non-pad token"
     )
 
+    if MODE == "steering":
+        alpha_by_feature, alpha_desc = resolve_steering_alphas(
+            global_candidates, STEERING_ALPHA, args.alpha_mode
+        )
+        print(f"Steering strength: {alpha_desc}")
+    else:
+        alpha_by_feature, alpha_desc = None, "n/a (ablation zeroes the feature)"
+
     delta_abs, delta_signed = get_model_intervention_effects(
         model,
         sae,
@@ -555,6 +587,7 @@ if __name__ == "__main__":
         layer=7,
         mode=MODE,
         steering_alpha=STEERING_ALPHA,
+        alpha_by_feature=alpha_by_feature,
         pos_token=POS_TOKEN,
         neg_token=NEG_TOKEN,
     )
@@ -562,7 +595,7 @@ if __name__ == "__main__":
     label = (
         "Ablated"
         if MODE == "ablation"
-        else f"Steered (a_i += {STEERING_ALPHA:+.3g})"
+        else f"Steered ({alpha_desc})"
     )
     print(f"{label} {len(delta_abs)} features")
     print("Top features by |Δ| (logit wonderful − awful):")
@@ -575,17 +608,48 @@ if __name__ == "__main__":
         "IG": ig_scores,
         "GA": ga_scores,
     }
-    report_faithfulness(method_scores, delta_abs, delta_signed, MODE)
+    header = (
+        f"Linear (logistic) arm - faithfulness\n"
+        f"mode={MODE}  selection={SELECTION}  k={K}  seed={SEED}  "
+        f"n_eval={len(steer_eval_idx)}\n"
+        f"alpha: {alpha_desc}\n"
+        + (
+            "NOTE: selection='top' picks candidates by |SHAP|, which restricts "
+            "SHAP's range on the scored set and biases its rho downward relative "
+            "to the other three methods.\n"
+            if SELECTION == "top"
+            else ""
+        )
+        + (
+            f"NOTE: rho over n={K} features x 4 methods x 2 correlation types, "
+            "no multiple-comparison control - p-values are descriptive.\n"
+            if K < 30
+            else ""
+        )
+    )
+    faith_text = report_faithfulness(
+        method_scores, delta_abs, delta_signed, MODE, header=header
+    )
 
+    # Every artifact is tagged with the configuration that produced it. These
+    # files used to have config-independent names, so a second run into the same
+    # directory silently replaced the candidate set the first run's JSON refers to.
+    tag = f"{MODE}_{SELECTION}_k{K}"
     out_dir = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     # JSON, not np.save: these are dict[int, float], and np.save would pickle
     # them into a 0-d object array that only reloads with allow_pickle=True.
-    with open(out_dir / f"model_deltas_{MODE}.json", "w") as f:
+    with open(out_dir / f"model_deltas_{tag}.json", "w") as f:
         json.dump(
             {
                 "mode": MODE,
                 "steering_alpha": STEERING_ALPHA,
+                "alpha_mode": args.alpha_mode,
+                "alpha_by_feature": (
+                    {str(k): v for k, v in alpha_by_feature.items()}
+                    if alpha_by_feature
+                    else None
+                ),
                 "selection": SELECTION,
                 "k": K,
                 "seed": SEED,
@@ -596,7 +660,8 @@ if __name__ == "__main__":
             f,
             indent=2,
         )
-    np.save(out_dir / "shap_top_local.npy", local_top)
-    np.save(out_dir / "shap_top_global.npy", global_candidates)
-    np.save(out_dir / "eval_indices.npy", steer_eval_idx)
-    print(f"\nWrote outputs → {out_dir}/")
+    (out_dir / f"faithfulness_{tag}.txt").write_text(faith_text)
+    np.save(out_dir / f"shap_top_local_{tag}.npy", local_top)
+    np.save(out_dir / f"shap_top_global_{tag}.npy", global_candidates)
+    np.save(out_dir / f"eval_indices_{tag}.npy", steer_eval_idx)
+    print(f"\nWrote outputs → {out_dir}/  (tag: {tag})")
