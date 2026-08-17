@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from datasets import load_from_disk
 from sae_lens import HookedSAETransformer
+from scipy.stats import binomtest, false_discovery_control
 from transformer_lens import utils as tl_utils
 
 # Canonical sampling parameters. Every script that computes attributions or
@@ -148,6 +149,102 @@ def resolve_steering_alphas(
         f"(range {lo:+.4g} .. {hi:+.4g})"
     )
     return alphas, desc
+
+
+def benjamini_hochberg(
+    pvalues: dict[str, float], alpha: float = 0.05
+) -> dict[str, dict]:
+    """
+    Benjamini-Hochberg FDR correction over a caller-defined family of tests.
+
+    The faithfulness tables run 4 methods x 2 correlation types = 8 tests per
+    configuration, and a seed sweep multiplies that by the number of seeds, with
+    no correction applied historically. At 8 uncorrected tests, one "significant"
+    result at p<0.05 is the *expected* yield under a complete null — which is
+    exactly what run2's two isolated hits look like.
+
+    The family is whatever the caller passes in: pass the 8 tests of one run to
+    correct within a configuration, or the 8*n_seeds of a sweep to correct across
+    it. Deliberately not hardcoded, because the right family depends on what is
+    being claimed.
+
+    Returns {name: {"p": raw, "q": adjusted, "reject": bool}}. Order of the input
+    dict is preserved in the output.
+    """
+    if not pvalues:
+        return {}
+    names = list(pvalues)
+    raw = np.asarray([float(pvalues[n]) for n in names], dtype=np.float64)
+    # NaN p-values (a degenerate Spearman on constant input) would poison the
+    # adjustment; hold them out and re-insert as NaN afterwards.
+    finite = np.isfinite(raw)
+    q = np.full_like(raw, np.nan)
+    if finite.any():
+        q[finite] = false_discovery_control(raw[finite], method="bh")
+    return {
+        name: {
+            "p": float(raw[i]),
+            "q": float(q[i]),
+            "reject": bool(np.isfinite(q[i]) and q[i] <= alpha),
+        }
+        for i, name in enumerate(names)
+    }
+
+
+def sign_agreement_test(
+    signed_scores: dict[int, float],
+    oriented_deltas: dict[int, float],
+) -> dict:
+    """
+    Does the *sign* of an attribution predict the sign of its causal effect?
+
+    Complements the Spearman directional rho, which can be dragged around by a
+    couple of large-|delta| features. This asks the blunter question: across k
+    features, how often does sign(attribution) == sign(oriented delta), and is
+    that better than a coin flip?
+
+    `oriented_deltas` must already have passed through `orient_signed_effects`,
+    so "agreement" means the same thing under steering and ablation.
+
+    Reports the two-sided binomial test (is the agreement rate different from
+    chance?) and the one-sided `less` test (is it *worse* than chance — i.e. an
+    actual sign inversion, which is the specific hypothesis run1 and run2 both
+    hint at). Features with a delta of exactly 0 are counted as non-agreeing but
+    also reported separately, since an inactive feature under ablation gives
+    delta == 0 by construction and carries no directional information.
+    """
+    feats = sorted(set(signed_scores) & set(oriented_deltas))
+    n_agree = 0
+    n_zero_delta = 0
+    for f in feats:
+        s = float(signed_scores[f])
+        d = float(oriented_deltas[f])
+        if d == 0.0:
+            n_zero_delta += 1
+            continue
+        if (s > 0 and d > 0) or (s < 0 and d < 0):
+            n_agree += 1
+    n = len(feats) - n_zero_delta
+    if n == 0:
+        return {
+            "n": 0,
+            "n_agree": 0,
+            "n_zero_delta": n_zero_delta,
+            "agreement_rate": float("nan"),
+            "binom_two_sided_p": float("nan"),
+            "binom_less_p": float("nan"),
+        }
+    return {
+        "n": int(n),
+        "n_agree": int(n_agree),
+        "n_zero_delta": int(n_zero_delta),
+        "agreement_rate": float(n_agree / n),
+        "binom_two_sided_p": float(
+            binomtest(n_agree, n, 0.5, alternative="two-sided").pvalue
+        ),
+        # "less" = agreement is *below* chance = the sign-inversion hypothesis.
+        "binom_less_p": float(binomtest(n_agree, n, 0.5, alternative="less").pvalue),
+    }
 
 
 def load_model():

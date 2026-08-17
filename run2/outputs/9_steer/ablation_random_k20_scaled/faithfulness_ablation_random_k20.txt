@@ -1,0 +1,15 @@
+Linear (logistic) arm - faithfulness
+mode=ablation  selection=random  k=20  seed=0  n_eval=1000
+alpha: n/a (ablation zeroes the feature)
+NOTE: rho over n=20 features x 4 methods x 2 correlation types, no multiple-comparison control - p-values are descriptive.
+
+Importance faithfulness  (Spearman rho of |attribution| vs |delta|):
+  SHAP            rho=-0.045  p=0.8502
+  Probe weights   rho=-0.183  p=0.4388
+  IG              rho=-0.045  p=0.8502
+  GA              rho=-0.045  p=0.8502
+Directional faithfulness (Spearman rho of attribution vs -delta; positive = faithful under mode=ablation):
+  SHAP            rho=-0.164  p=0.4899
+  Probe weights   rho=+0.448  p=0.0475
+  IG              rho=-0.164  p=0.4899
+  GA              rho=-0.164  p=0.4899

@@ -75,18 +75,32 @@ ALPHA_MODE = "scaled"
 OUT_DIR = output_path("9_local_steer")
 
 
-def save_ragged(path: Path, arrays: list[np.ndarray]) -> None:
+def save_local_artifacts(
+    out_dir: Path,
+    example_indices: np.ndarray,
+    n_cands: np.ndarray,
+    n_active: np.ndarray,
+    faith: dict[str, dict],
+    faith_active: dict[str, dict],
+) -> None:
     """
-    Save a list of variable-length int arrays as a 1-D object array.
+    Persist only what later stats need.
 
-    `np.asarray(arrays, dtype=object)` silently produces a 2-D object array when
-    every element happens to be the same length, so the reload shape depends on
-    the data. Preallocating the object array pins it to 1-D either way.
+    Local SHAP, per-feature Δ, and the ragged candidate lists are cheap to
+    recompute; the deliverable is the per-example ρ (Wilcoxon / gap regression)
+    plus the eval-row ids so results join the rest of the pipeline.
     """
-    out = np.empty(len(arrays), dtype=object)
-    for i, arr in enumerate(arrays):
-        out[i] = np.asarray(arr, dtype=np.int64)
-    np.save(path, out, allow_pickle=True)
+    arrays: dict[str, np.ndarray] = {
+        "n_cands": np.asarray(n_cands, dtype=np.int64),
+        "n_active": np.asarray(n_active, dtype=np.int64),
+    }
+    for prefix, block_set in (("", faith), ("active_", faith_active)):
+        for name, block in block_set.items():
+            safe = name.replace(" ", "_")
+            arrays[f"{prefix}importance_{safe}"] = block["importance_rho"]
+            arrays[f"{prefix}directional_{safe}"] = block["directional_rho"]
+    np.savez(out_dir / "rhos.npz", **arrays)
+    np.save(out_dir / "example_indices.npy", example_indices)
 
 
 def spearman_pair(
@@ -428,7 +442,7 @@ def main(
     # Sample N SHAP-split examples + background; compute local LinearSHAP.
     # Shared sampler => these rows are an ordered prefix of the rows the global
     # scripts explain, so local and global results join by position.
-    shap_eval, background, pick, bg_idx = load_eval_and_background(
+    shap_eval, background, pick, _bg_idx = load_eval_and_background(
         layer=LAYER, n_eval=n_examples, n_background=N_BACKGROUND
     )
 
@@ -525,27 +539,7 @@ def main(
         )
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    np.save(out_dir / "example_indices.npy", pick)
-    np.save(out_dir / "background_indices.npy", bg_idx)
-    np.save(out_dir / "feature_indices.npy", feature_indices)
-    np.save(out_dir / "union_local.npy", union_local)
-    np.save(out_dir / "union_global.npy", union_global)
-    np.save(out_dir / "n_cands_per_example.npy", n_cands)
-    np.save(out_dir / "n_active_cands_per_example.npy", n_active)
-    save_ragged(out_dir / "cands_per_example.npy", cands_per_example)
-    save_ragged(out_dir / "active_cands_per_example.npy", active_cands)
-    np.save(out_dir / "local_shap.npy", local_shap)
-    np.save(out_dir / f"delta_signed_{mode}.npy", delta_signed)
-    np.save(out_dir / f"delta_abs_{mode}.npy", delta_abs)
-    for prefix, block_set in (("", faith), ("active_", faith_active)):
-        for name, block in block_set.items():
-            safe = name.replace(" ", "_")
-            np.save(
-                out_dir / f"{prefix}rho_importance_{safe}.npy", block["importance_rho"]
-            )
-            np.save(
-                out_dir / f"{prefix}rho_directional_{safe}.npy", block["directional_rho"]
-            )
+    save_local_artifacts(out_dir, pick, n_cands, n_active, faith, faith_active)
     with open(out_dir / "summary.json", "w") as f:
         json.dump(
             {

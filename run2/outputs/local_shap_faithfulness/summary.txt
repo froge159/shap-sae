@@ -1,0 +1,8 @@
+Local DeepSHAP vs per-example ablation
+==================================================
+target=lm  n=100  k_local=20  k_global=20
+mean Spearman ρ(|local φ| vs |Δ|)  = 0.345 ± 0.172
+mean Spearman ρ(|global Φ| vs |Δ|) = -0.223 ± 0.224
+fraction examples with ρ_local > ρ_global = 1.000
+
+Local SHAP ranks per-example ablation effects better than global Φ → averaging was likely a main error source.

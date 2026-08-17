@@ -1,0 +1,25 @@
+Sign-agreement reanalysis (existing deltas, logit-diff readout)
+==================================================================
+source=model_deltas_steering_random_k20.json  mode=steering  selection=random  k=20  n_eval=1000
+
+Agreement = sign(attribution) matches sign(oriented delta).
+'inversion p' is the one-sided binomial test for agreement BELOW chance.
+
+method           group              agree    rate  two-sided p  inversion p
+----------------------------------------------------------------------------
+SHAP             (all)            11/20     0.550       0.8238       0.7483
+SHAP             positive_phi      6/10     0.600       0.7539       0.8281
+SHAP             negative_phi      5/10     0.500       1.0000       0.6230
+Probe weights    (all)            11/20     0.550       0.8238       0.7483
+Probe weights    positive_phi      6/10     0.600       0.7539       0.8281
+Probe weights    negative_phi      5/10     0.500       1.0000       0.6230
+IG               (all)            11/20     0.550       0.8238       0.7483
+IG               positive_phi      6/10     0.600       0.7539       0.8281
+IG               negative_phi      5/10     0.500       1.0000       0.6230
+GA               (all)            11/20     0.550       0.8238       0.7483
+GA               positive_phi      6/10     0.600       0.7539       0.8281
+GA               negative_phi      5/10     0.500       1.0000       0.6230
+
+CAVEAT: n=20 features. A binomial test at this n cannot resolve anything
+but a very large inversion. Read as motivating; run --selection top-pos / top-neg
+for a sign-pure, adequately-powered test.

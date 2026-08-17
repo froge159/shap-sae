@@ -1,0 +1,8 @@
+{
+  "layer": 7,
+  "accuracy": 0.7352999406058206,
+  "auroc": 0.8083800889969874,
+  "n_features": 116,
+  "hidden_dim": 32,
+  "n_iter": 70
+}

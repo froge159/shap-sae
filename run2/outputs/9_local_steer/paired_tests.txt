@@ -1,0 +1,21 @@
+Local vs global faithfulness - formal tests
+==============================================================
+source: run2/outputs/9_local_steer
+
+Paired Wilcoxon signed-rank on per-example (rho_local - rho_global).
+Positive gap = local SHAP ranks that example's effects better.
+
+block:kind               local  global     gap            95% CI  wilcoxon p  win frac
+----------------------------------------------------------------------------------------
+A:importance            +0.414  -0.269  +0.682   [+0.644,+0.720]    3.90e-18     1.000
+A:directional           +0.135  -0.158  +0.294   [+0.233,+0.361]    4.06e-15     0.860
+B:importance            +0.202  +0.285  -0.083   [-0.161,-0.011]    6.61e-02     0.420
+B:directional           +0.144  -0.311  +0.455   [+0.376,+0.540]    9.07e-16     0.880
+
+Decomposition of the block [A] importance gap:
+  mean active fraction of candidates = 0.490
+  gap ~ frac_active            slope=-0.384  R2=0.019  p=1.69e-01
+  gap ~ n_active               slope=-0.004  R2=0.002  p=6.80e-01
+  gap ~ frac_active + n_cands  coefs=[-0.572, 0.046]  R2=0.120
+  A high R2 here means the local-vs-global margin is largely an activity effect,
+  not a ranking-quality effect.

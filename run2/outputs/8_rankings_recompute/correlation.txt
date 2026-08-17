@@ -1,0 +1,13 @@
+Closed-form identity check (linear probe, margin target):
+  max|IG - Phi| = 6.324e-07   (relative 5.057e-06)
+  max|GA - Phi| = 6.324e-07   (relative 5.057e-06)
+  rtol          = 1.0e-05   (float32 accumulation floors this near 1e-7)
+  PASS - IG, GA and SHAP coincide analytically, as they must for a linear probe. The rank agreement below is an identity, not evidence.
+
+n_features=1301
+Probe vs IG:   ρ=0.297,   p=0.0000
+Probe vs SHAP: ρ=0.297, p=0.0000
+IG vs SHAP:    ρ=1.000,    p=0.0000
+Probe vs GA:   ρ=0.297,   p=0.0000
+IG vs GA:      ρ=1.000,      p=0.0000
+SHAP vs GA:    ρ=1.000,    p=0.0000

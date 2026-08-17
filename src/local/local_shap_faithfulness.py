@@ -36,9 +36,15 @@ Confound to keep in mind
 Globally-top features are usually *inactive* in any one sentence, and ablating an
 inactive feature moves the logit by exactly 0. Local |φ(x)| tracks activity by
 construction; global |Φ| does not. So some of any "local wins" margin is really
-"local knows which features fire here". 9_local_steer / 14_local_mlp_steer report
-an activity-matched control block for this; treat the headline here as an upper
-bound on the local advantage.
+"local knows which features fire here".
+
+This script now reports the same **block [A] / block [B]** split as
+9_local_steer / 14_local_mlp_steer: [A] over all candidates, [B] rescored on only
+the candidates the sentence actually activates. Block [B] is the one to quote —
+[A] is dominated by the exact-zero tie block from inactive features. The control
+is free here: the per-candidate Δ are already computed in the main loop, so [B]
+is a CPU-side subset of the same numbers, not a second GPU pass. The raw deltas
+and candidate sets are persisted so any further control can be added offline.
 """
 
 from __future__ import annotations
@@ -207,6 +213,39 @@ def spearman_abs(scores: np.ndarray, deltas: np.ndarray) -> tuple[float, float]:
     return float(rho), float(p)
 
 
+def restrict_to_active(
+    cands_per_example: list[np.ndarray], active: np.ndarray
+) -> list[np.ndarray]:
+    """
+    Keep only candidates the example actually activates.
+
+    Same control as local/9_local_steer.py and local/14_local_mlp_steer.py, added
+    here so this script's headline is not the only local number in the repo
+    without one. Candidates are top-k |phi(x)| union top-k |Phi|, and the global
+    half is usually *inactive* in any one sentence — ablating an inactive feature
+    moves the logit by exactly 0, while local |phi(x)| tracks activity by
+    construction. Block [B] asks whether local SHAP still wins once that
+    advantage is removed.
+
+    active: (n_examples, n_filtered) boolean, activation > 0.
+    """
+    return [cand[active[e, cand]] for e, cand in enumerate(cands_per_example)]
+
+
+def save_ragged(path: Path, arrays: list[np.ndarray], dtype=np.int64) -> None:
+    """
+    Save variable-length arrays as a 1-D object array.
+
+    `np.asarray(arrays, dtype=object)` silently produces a 2-D array when every
+    element happens to share a length, so the reload shape would depend on the
+    data. Preallocating pins it to 1-D. (Same helper as 9_local_steer.)
+    """
+    out = np.empty(len(arrays), dtype=object)
+    for i, arr in enumerate(arrays):
+        out[i] = np.asarray(arr, dtype=dtype)
+    np.save(path, out, allow_pickle=True)
+
+
 def load_global_phi(feature_indices: np.ndarray) -> np.ndarray:
     """
     Φ on the filtered axis, from 12_mlp_shap's full-sample DeepSHAP run.
@@ -281,7 +320,14 @@ def main(
 
     rho_local_list = []
     rho_global_list = []
+    active_rho_local_list = []
+    active_rho_global_list = []
     rows_meta = []
+    cands_per_example: list[np.ndarray] = []
+    deltas_per_example: list[np.ndarray] = []
+
+    # Activity mask for the block [B] control (activation > 0 on the filtered axis).
+    active_mask = X_filt > 0
 
     # Store ragged results as lists; also a dense summary table.
     for e in tqdm(range(n_examples), desc="Per-example ablation"):
@@ -305,15 +351,30 @@ def main(
         rho_g, p_g = spearman_abs(global_scores, deltas)
         rho_local_list.append(rho_l)
         rho_global_list.append(rho_g)
+
+        # Block [B]: rescore on the candidates this example actually activates.
+        # No extra intervention needed — the deltas are already computed, so the
+        # control is a free CPU-side subset of the same numbers.
+        keep = active_mask[e, cand_local]
+        a_rho_l, _ = spearman_abs(local_scores[keep], deltas[keep])
+        a_rho_g, _ = spearman_abs(global_scores[keep], deltas[keep])
+        active_rho_local_list.append(a_rho_l)
+        active_rho_global_list.append(a_rho_g)
+
+        cands_per_example.append(cand_local)
+        deltas_per_example.append(deltas)
         rows_meta.append(
             {
                 "example_i": int(e),
                 "shap_split_idx": int(pick[e]),
                 "n_candidates": int(len(cand_local)),
+                "n_active_candidates": int(keep.sum()),
                 "rho_local": rho_l,
                 "p_local": p_l,
                 "rho_global": rho_g,
                 "p_global": p_g,
+                "active_rho_local": a_rho_l,
+                "active_rho_global": a_rho_g,
                 "local_wins": bool(rho_l > rho_g)
                 if np.isfinite(rho_l) and np.isfinite(rho_g)
                 else None,
@@ -322,6 +383,13 @@ def main(
 
     rho_local_arr = np.asarray(rho_local_list, dtype=np.float64)
     rho_global_arr = np.asarray(rho_global_list, dtype=np.float64)
+    active_rho_local_arr = np.asarray(active_rho_local_list, dtype=np.float64)
+    active_rho_global_arr = np.asarray(active_rho_global_list, dtype=np.float64)
+    n_cands_arr = np.asarray([len(c) for c in cands_per_example], dtype=np.int64)
+    n_active_arr = np.asarray(
+        [int(active_mask[e, c].sum()) for e, c in enumerate(cands_per_example)],
+        dtype=np.int64,
+    )
     finite = np.isfinite(rho_local_arr) & np.isfinite(rho_global_arr)
     mean_local = float(np.nanmean(rho_local_arr))
     mean_global = float(np.nanmean(rho_global_arr))
@@ -330,6 +398,18 @@ def main(
     frac_local_wins = (
         float(np.mean(rho_local_arr[finite] > rho_global_arr[finite]))
         if finite.any()
+        else float("nan")
+    )
+    a_finite = np.isfinite(active_rho_local_arr) & np.isfinite(active_rho_global_arr)
+    mean_active_local = float(np.nanmean(active_rho_local_arr))
+    mean_active_global = float(np.nanmean(active_rho_global_arr))
+    frac_active_local_wins = (
+        float(
+            np.mean(
+                active_rho_local_arr[a_finite] > active_rho_global_arr[a_finite]
+            )
+        )
+        if a_finite.any()
         else float("nan")
     )
 
@@ -346,6 +426,13 @@ def main(
         "std_rho_local": float(np.nanstd(rho_local_arr)),
         "std_rho_global": float(np.nanstd(rho_global_arr)),
         "frac_examples_local_gt_global": frac_local_wins,
+        "mean_n_candidates": float(n_cands_arr.mean()),
+        "mean_n_active_candidates": float(n_active_arr.mean()),
+        "active_mean_rho_local": mean_active_local,
+        "active_mean_rho_global": mean_active_global,
+        "active_std_rho_local": float(np.nanstd(active_rho_local_arr)),
+        "active_std_rho_global": float(np.nanstd(active_rho_global_arr)),
+        "active_frac_examples_local_gt_global": frac_active_local_wins,
         "interpretation": (
             "Local SHAP ranks per-example ablation effects better than global Φ "
             "→ averaging was likely a main error source."
@@ -365,6 +452,17 @@ def main(
     np.save(out_dir / "global_phi_filtered.npy", global_phi_filt)
     np.save(out_dir / "rho_local.npy", rho_local_arr)
     np.save(out_dir / "rho_global.npy", rho_global_arr)
+    np.save(out_dir / "active_rho_local.npy", active_rho_local_arr)
+    np.save(out_dir / "active_rho_global.npy", active_rho_global_arr)
+    np.save(out_dir / "n_cands_per_example.npy", n_cands_arr)
+    np.save(out_dir / "n_active_cands_per_example.npy", n_active_arr)
+    # Persisting the raw per-candidate deltas is what lets any further control
+    # (block [B], a continuous activity control, a different candidate rule) be
+    # computed offline instead of needing another GPU pass.
+    save_ragged(out_dir / "cands_per_example.npy", cands_per_example)
+    save_ragged(
+        out_dir / "deltas_per_example.npy", deltas_per_example, dtype=np.float64
+    )
     with open(out_dir / "per_example.json", "w") as f:
         json.dump(rows_meta, f, indent=2)
     with open(out_dir / "summary.json", "w") as f:
@@ -374,11 +472,26 @@ def main(
         "Local DeepSHAP vs per-example ablation",
         "=" * 50,
         f"target={target}  n={n_examples}  k_local={k_local}  k_global={k_global}",
-        f"mean Spearman ρ(|local φ| vs |Δ|)  = {mean_local:.3f} "
+        "",
+        "[A] All candidates",
+        f"  mean Spearman ρ(|local φ| vs |Δ|)  = {mean_local:.3f} "
         f"± {summary['std_rho_local']:.3f}",
-        f"mean Spearman ρ(|global Φ| vs |Δ|) = {mean_global:.3f} "
+        f"  mean Spearman ρ(|global Φ| vs |Δ|) = {mean_global:.3f} "
         f"± {summary['std_rho_global']:.3f}",
-        f"fraction examples with ρ_local > ρ_global = {frac_local_wins:.3f}",
+        f"  fraction examples with ρ_local > ρ_global = {frac_local_wins:.3f}",
+        "",
+        "[B] Active candidates only (control)",
+        "    Globally-top features are usually inactive in any one sentence, and",
+        "    ablating an inactive feature gives Δ = 0 exactly, while local |φ(x)|",
+        "    tracks activity by construction. [B] removes that advantage.",
+        f"  mean active candidates = {n_active_arr.mean():.1f} of "
+        f"{n_cands_arr.mean():.1f}",
+        f"  mean Spearman ρ(|local φ| vs |Δ|)  = {mean_active_local:.3f} "
+        f"± {summary['active_std_rho_local']:.3f}",
+        f"  mean Spearman ρ(|global Φ| vs |Δ|) = {mean_active_global:.3f} "
+        f"± {summary['active_std_rho_global']:.3f}",
+        f"  fraction examples with ρ_local > ρ_global = "
+        f"{frac_active_local_wins:.3f}",
         "",
         summary["interpretation"],
         "",

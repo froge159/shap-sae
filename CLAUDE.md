@@ -283,6 +283,160 @@ reconstruction. Compare curve *shapes* across the two families, never magnitudes
 
 ---
 
+## Steps 21-27 — follow-up experiments
+
+Added after the `run2` analysis to shore up the three weakest claims: the global
+faithfulness null rests on one k=20/seed=0 draw, the local-vs-global result was
+reported as "mean ± std" with no test, and the sign-inversion anomaly had never
+been tested directly. Full rationale and statistics are in
+`MANUSCRIPT_METHODOLOGY.md` §14-§18.
+
+**Run steps 21-23 first — they are free.** No GPU, no new forward passes; they
+only reanalyse artifacts steps 1-20 already wrote. Do them before spending any
+GPU time, because they may change what you want to run next.
+
+### Steps 21-23 — free offline reanalysis (CPU, seconds)
+
+```bash
+# 21 — formal paired tests + activity decomposition for local vs global.
+#      Replaces "mean ± std" with Wilcoxon signed-rank, bootstrap CIs, a
+#      regression of the per-example gap on activity, and a continuous
+#      (partial-Spearman) alternative to the binary block [B] split.
+uv run python src/local/analyze_local_vs_global.py
+
+# 22 — sign-agreement reanalysis of existing steer deltas (linear arm).
+#      Joins model_deltas_*.json against the saved Phi and runs a binomial
+#      sign test, stratified by the sign of the attribution.
+uv run python src/global_linear/9c_sign_reanalysis.py \
+  $SHAP_SAE_OUTPUTS/9_steer/steering_top_k20_scaled/model_deltas_steering_top_k20.json \
+  $SHAP_SAE_OUTPUTS/9_steer/steering_random_k20_scaled/model_deltas_steering_random_k20.json
+
+# 23 — same for the MLP arm (note --arm mlp: it joins against 13_mlp_ranking)
+uv run python src/global_linear/9c_sign_reanalysis.py --arm mlp \
+  $SHAP_SAE_OUTPUTS/14_mlp_steer/steering_top_k20_scaled/model_deltas_steering_top_k20.json
+```
+
+- **21** → `paired_tests.{json,txt}` in each of `9_local_steer/`,
+  `14_local_mlp_steer/`, `local_shap_faithfulness/`. **Read the block [B]
+  directional row** — on `run2` that is where local SHAP survives the activity
+  control (ρ gap ≈ +0.46 linear / +0.53 MLP, p < 1e-15) even though it *loses*
+  block [B] importance. The original `summary.txt` contained those numbers but
+  never tested them.
+- **22/23** → `sign_test_<tag>.{json,txt}` beside each input. On `run2` the
+  inversion is confined to the **top-|SHAP|** set (4/11 positive-Φ features agree
+  in the linear arm, 3/10 in the MLP arm) and absent from the random set (6/10),
+  which is consistent with `9.5_tuning` piloting on top-|SHAP| features. Every
+  p is > 0.1 at n≈10 — **motivating, not conclusive**; that is what step 25 is for.
+
+### Step 24 — higher-power global faithfulness (the single best GPU spend)
+
+`--selection all` scores the whole 116-feature filtered pool, raising n per
+correlation from 20 to 116 with no resampling and no seed luck. ~5.6× one k=20
+run per arm.
+
+```bash
+A=$(grep recommended_alpha $SHAP_SAE_OUTPUTS/9.5_tuning/alpha_calibration.txt | awk '{print $3}')
+
+uv run python src/global_linear/9_steer.py --mode steering --selection all \
+  --n-eval 1000 --alpha $A --alpha-mode scaled --bh-correction \
+  --out-dir $SHAP_SAE_OUTPUTS/9_steer/steering_all_scaled
+uv run python src/global_mlp/14_mlp_steer.py --mode steering --selection all \
+  --n-eval 1000 --alpha $A --alpha-mode scaled --bh-correction \
+  --out-dir $SHAP_SAE_OUTPUTS/14_mlp_steer/steering_all_scaled
+```
+
+Tag is `steering_all_k116`. `--bh-correction` appends an FDR block to the table
+and writes a `faithfulness_<tag>_bh.json` sidecar; it never alters the existing
+`faithfulness_<tag>.txt` body, so old artifacts stay comparable.
+
+### Step 25 — sign-stratified inversion test
+
+Scores one attribution sign at a time, so a systematic inversion cannot cancel
+within the candidate set. Uses the real logit-diff readout, so it also isolates
+the layer-11-probe-vs-logit-diff mismatch as a candidate explanation. ~2× one
+k=20 run per arm.
+
+```bash
+for SEL in top-pos top-neg; do
+  uv run python src/global_linear/9_steer.py --mode steering --selection $SEL \
+    --k 20 --n-eval 1000 --alpha $A --alpha-mode scaled \
+    --out-dir $SHAP_SAE_OUTPUTS/9_steer/steering_${SEL}_k20_scaled
+  uv run python src/global_mlp/14_mlp_steer.py --mode steering --selection $SEL \
+    --k 20 --n-eval 1000 --alpha $A --alpha-mode scaled \
+    --out-dir $SHAP_SAE_OUTPUTS/14_mlp_steer/steering_${SEL}_k20_scaled
+done
+```
+
+Tags are `steering_toppos_k20` / `steering_topneg_k20` (the hyphen is stripped).
+These runs embed a `sign_agreement` block directly in their
+`model_deltas_<tag>.json` — no separate reanalysis needed.
+
+**Also re-run the α pilot under the evaluation readout** (same cost as the
+original `9.5_tuning`, and it cannot clobber it — output is tagged
+`_logitdiff` and it recommends no α):
+
+```bash
+uv run python src/global_linear/9.5_tuning.py --readout logitdiff
+```
+
+→ `9.5_tuning/alpha_calibration_logitdiff.txt`. Compare its `mean_signed_dp`
+column against the probe-readout file. **Both negative ⇒ the inversion is not a
+readout artifact** and is a finding to explain. Signs disagreeing ⇒ the anomaly
+was substantially the readout mismatch, which is itself worth reporting.
+
+### Step 26 — multi-seed replication
+
+Turns "one seed landed near zero" into "near zero is what draws of this size
+look like". Loads the model once and intervenes over the *union* of all seeds'
+candidates (~99 of 116 for 10 seeds at k=20), so it costs ~5× one k=20 run
+rather than 10×.
+
+```bash
+uv run python src/global_linear/9a_seed_sweep.py --mode steering \
+  --alpha $A --alpha-mode scaled --k 20 --seeds 0-9 --ref-seed 0
+uv run python src/global_mlp/14a_seed_sweep.py --mode steering \
+  --alpha $A --alpha-mode scaled --k 20 --seeds 0-9 --ref-seed 0
+```
+
+→ `9_seed_sweep/` and `14_mlp_seed_sweep/`: `seed_sweep_<tag>.{json,txt}`.
+Reports per-seed ρ, a one-sample Wilcoxon against 0, a bootstrap CI over seeds,
+and `ref_seed_outlier_p` (how extreme the published seed-0 run was among the
+draws). Also applies BH across the whole pooled sweep — that pooled count is the
+honest family size when the claim is "nothing was significant anywhere".
+
+### Step 27 — known-ground-truth minimal pairs
+
+The only experiment here where the true answer is known by construction, so it
+is the one that can distinguish "the methods are unfaithful" from "the harness
+cannot detect faithfulness". ~5 min for 100 pairs.
+
+```bash
+uv run python src/groundtruth/24_minimal_pairs.py --edit remove --n-pairs 100
+uv run python src/groundtruth/24_minimal_pairs.py --edit insert --n-pairs 100
+```
+
+→ `24_minimal_pairs/summary_<edit>_n<N>.{json,txt}` + `per_pair_*.json`.
+Reports three things, in dependency order:
+
+1. **Readout sign accuracy** — does deleting a known sentiment word move the
+   logit diff the right way? If this is near 0.5, *nothing else in the
+   pipeline is interpretable* and that is the headline. On a 12-pair pilot it
+   was ~0.9, i.e. the readout is sound.
+2. **AUROC for recovering edit-carrying features** (binary ground truth).
+3. **Spearman of |attribution| vs the causal effect of ablating that feature.**
+
+**Two confounds are already controlled; do not undo them.** Local SHAP is
+computed against the *canonical train background*, not against the pair's own
+original activations — with the latter, `|φ| ∝ |Δactivation|`, which is the
+ground-truth label itself, and local SHAP scores a near-perfect AUROC
+tautologically (0.80 vs 0.51 once fixed). And `--distractors random` is the
+headline: `--distractors global` picks the negative class by top-|Φ|, which
+forces global SHAP's AUROC toward 0 by construction (0.11 vs 0.49 once fixed),
+the same range-restriction trap as `--selection top`. Both biased variants
+remain available but are secondary and must be labelled.
+
+---
+
 ## Verification after the run
 
 ```

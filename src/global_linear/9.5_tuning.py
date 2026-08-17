@@ -16,6 +16,7 @@ not a tuned hyperparameter.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import os
 import sys
@@ -135,15 +136,29 @@ def pilot_effects_for_alpha(
     alpha: float,
     readout_layer: int,
     baseline_probs: np.ndarray,
+    readout: str = "probe",
 ) -> dict:
     """
     Additive steering at `alpha` on pilot features / subset.
 
-    Uses a shared SAE-recon baseline (`baseline_probs`) computed once by the caller.
+    Uses a shared baseline (`baseline_probs`) computed once by the caller under
+    the same readout.
+
+    `readout="probe"` scores the layer-11 residual probe's P(positive) — the
+    historical behaviour, and the one whose persistent negative `mean_signed_dp`
+    is the sign-inversion anomaly. `readout="logitdiff"` scores the *same* pilot
+    with the GPT-2 logit difference the steer scripts actually use, holding every
+    other variable fixed. That isolates "is the inversion a property of the model"
+    from "is it an artifact of calibrating on a readout we never evaluate with".
+    Saturation is only defined for the probability readout; the logit difference
+    is unbounded, so it reports 0.0 there rather than a meaningless flag.
     """
     intervene_point = f"blocks.{LAYER}.hook_resid_post"
     readout_point = f"blocks.{readout_layer}.hook_resid_post"
     resid_store: dict = {}
+    pos_id, neg_id = (
+        steer9.sentiment_token_ids(model) if readout == "logitdiff" else (None, None)
+    )
 
     def capture_hook(resid_post, hook):
         resid_store["resid"] = resid_post
@@ -168,17 +183,22 @@ def pilot_effects_for_alpha(
         intervened_probs = []
         for tokens in tokens_subset:
             tokens = steer9._as_batch(tokens, model.cfg.device)
+            hooks = [(intervene_point, intervention_hook)]
+            if readout == "probe":
+                hooks.append((readout_point, capture_hook))
             with torch.no_grad():
-                with model.hooks(
-                    fwd_hooks=[
-                        (intervene_point, intervention_hook),
-                        (readout_point, capture_hook),
-                    ]
-                ):
-                    model(tokens)
-                p = probe_prob(tokens)
+                with model.hooks(fwd_hooks=hooks):
+                    logits = model(tokens)
+                if readout == "probe":
+                    p = probe_prob(tokens)
+                    sat_flags.append(p < 0.02 or p > 0.98)
+                else:
+                    p = float(
+                        steer9.last_non_pad_logit_diff(
+                            model, logits, tokens, pos_id, neg_id
+                        )[0]
+                    )
             intervened_probs.append(p)
-            sat_flags.append(p < 0.02 or p > 0.98)
 
         intervened_probs = np.asarray(intervened_probs)
         diffs = intervened_probs - baseline_probs
@@ -201,10 +221,15 @@ def compute_recon_baseline_probs(
     residual_probe,
     tokens_subset,
     readout_layer: int,
+    readout: str = "probe",
 ) -> np.ndarray:
+    """Shared SAE-recon baseline, scored under whichever readout is in use."""
     intervene_point = f"blocks.{LAYER}.hook_resid_post"
     readout_point = f"blocks.{readout_layer}.hook_resid_post"
     resid_store: dict = {}
+    pos_id, neg_id = (
+        steer9.sentiment_token_ids(model) if readout == "logitdiff" else (None, None)
+    )
 
     def capture_hook(resid_post, hook):
         resid_store["resid"] = resid_post
@@ -216,15 +241,27 @@ def compute_recon_baseline_probs(
     probs = []
     for tokens in tqdm(tokens_subset, desc="Pilot baseline"):
         tokens = steer9._as_batch(tokens, model.cfg.device)
+        hooks = [(intervene_point, recon_hook)]
+        if readout == "probe":
+            hooks.append((readout_point, capture_hook))
         with torch.no_grad():
-            with model.hooks(
-                fwd_hooks=[(intervene_point, recon_hook), (readout_point, capture_hook)]
-            ):
-                model(tokens)
-            pooled = steer9.pool_last_non_pad_token(model, tokens, resid_store["resid"])
-            probs.append(
-                float(residual_probe.predict_proba(pooled.reshape(1, -1))[0, 1])
-            )
+            with model.hooks(fwd_hooks=hooks):
+                logits = model(tokens)
+            if readout == "probe":
+                pooled = steer9.pool_last_non_pad_token(
+                    model, tokens, resid_store["resid"]
+                )
+                probs.append(
+                    float(residual_probe.predict_proba(pooled.reshape(1, -1))[0, 1])
+                )
+            else:
+                probs.append(
+                    float(
+                        steer9.last_non_pad_logit_diff(
+                            model, logits, tokens, pos_id, neg_id
+                        )[0]
+                    )
+                )
     return np.asarray(probs, dtype=np.float64)
 
 
@@ -287,9 +324,32 @@ def print_pilot_table(rows: list[dict]) -> None:
         )
 
 
-def main():
+def parse_args() -> "argparse.Namespace":
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument(
+        "--readout",
+        choices=("probe", "logitdiff"),
+        default="probe",
+        help=(
+            "'probe' = layer-11 residual probe P(positive), the calibration "
+            "readout (default, writes alpha_calibration.txt). 'logitdiff' = the "
+            "GPT-2 logit difference the steer scripts actually evaluate with; "
+            "same pilot otherwise, so it isolates whether the negative "
+            "mean_signed_dp is a readout artifact. Writes a _logitdiff-tagged "
+            "file and recommends no alpha (the threshold is on a probability "
+            "scale and does not transfer)."
+        ),
+    )
+    p.add_argument("--out-dir", type=Path, default=OUT_DIR)
+    return p.parse_args()
+
+
+def main(readout: str = "probe", out_dir: Path | None = None):
+    global OUT_DIR
+    if out_dir is not None:
+        OUT_DIR = Path(out_dir)
     os.makedirs(OUT_DIR, exist_ok=True)
-    print(f"Candidate pool + α report → {OUT_DIR}/")
+    print(f"Candidate pool + α report → {OUT_DIR}/  (readout={readout})")
 
     ranking = load_ranking_candidates()
     candidates = ranking["all_candidates"]
@@ -361,7 +421,7 @@ def main():
     print(f"\nPilot subset: {n_pilot} train examples × {len(pilot_features)} features")
 
     baseline_probs = compute_recon_baseline_probs(
-        model, sae, residual_probe, pilot_tokens, readout_layer
+        model, sae, residual_probe, pilot_tokens, readout_layer, readout=readout
     )
 
     rows = []
@@ -376,6 +436,7 @@ def main():
             alpha=alpha,
             readout_layer=readout_layer,
             baseline_probs=baseline_probs,
+            readout=readout,
         )
         rows.append(row)
         print(
@@ -385,10 +446,22 @@ def main():
         )
 
     print_pilot_table(rows)
-    best = recommend_alpha(rows)
+    # The acceptance threshold is defined on a probability scale, so it is only
+    # meaningful for the probe readout. The logitdiff pass exists to check the
+    # *sign*, not to pick an alpha.
+    best = recommend_alpha(rows) if readout == "probe" else None
 
     lines = []
     lines.append("Steering α calibration")
+    lines.append(f"readout = {readout}")
+    if readout == "logitdiff":
+        lines.append(
+            "NOTE: logit-difference readout (GPT-2 ' wonderful' - ' awful'), the "
+            "same one\nthe steer scripts evaluate with. Everything else matches "
+            "the probe pilot, so\ncomparing mean_signed_dp between the two files "
+            "isolates the readout. No alpha\nis recommended here: the "
+            f"mean|dP| >= {MIN_MEAN_ABS_DP} criterion is on a probability scale."
+        )
     lines.append(f"median_positive_activation_scale = {median_scale:.6f}")
     lines.append(f"median_decoder_norm = {float(np.median(norms)):.6f}")
     lines.append(f"pilot_features = {pilot_features.tolist()}")
@@ -409,7 +482,19 @@ def main():
             f"{r['mean_signed_dp']:+14.6f} {r['saturation_frac']:10.6f}"
         )
     lines.append("")
-    if best is None:
+    if best is None and readout == "logitdiff":
+        lines.append("recommended_alpha = N/A (logitdiff readout: sign check only)")
+        signs = [r["mean_signed_dp"] for r in rows]
+        lines.append(
+            f"mean_signed_dp sign across the grid: "
+            f"{'all negative' if all(s < 0 for s in signs) else ('all positive' if all(s > 0 for s in signs) else 'mixed')}"
+        )
+        print(
+            "\nLogit-diff pilot complete. Compare mean_signed_dp against the "
+            "probe-readout run:\nif both are negative, the inversion is not a "
+            "readout artifact."
+        )
+    elif best is None:
         lines.append("recommended_alpha = NONE")
         print("\nNo usable α found.")
     else:
@@ -430,22 +515,33 @@ def main():
             "as a rough 'measurable but unsaturated' magnitude, not a tuned value."
         )
 
-    out_txt = Path(OUT_DIR) / "alpha_calibration.txt"
+    # Tag the non-default readout so the logit-diff pass cannot overwrite the
+    # calibration file the rest of the pipeline reads its alpha from.
+    suffix = "" if readout == "probe" else f"_{readout}"
+    out_txt = Path(OUT_DIR) / f"alpha_calibration{suffix}.txt"
     out_txt.write_text("\n".join(lines) + "\n")
-    np.save(Path(OUT_DIR) / "alpha_grid.npy", np.array([r["alpha"] for r in rows]))
     np.save(
-        Path(OUT_DIR) / "alpha_pilot_mean_abs_dp.npy",
+        Path(OUT_DIR) / f"alpha_grid{suffix}.npy", np.array([r["alpha"] for r in rows])
+    )
+    np.save(
+        Path(OUT_DIR) / f"alpha_pilot_mean_abs_dp{suffix}.npy",
         np.array([r["mean_abs_dp"] for r in rows]),
     )
-    np.save(Path(OUT_DIR) / "candidate_scales.npy", scales)
-    np.save(Path(OUT_DIR) / "candidate_indices.npy", candidates)
-    np.save(Path(OUT_DIR) / "pilot_row_indices.npy", pilot_rows)
-    # pool_scales / pool_indices are what utils.resolve_steering_alphas consumes
-    # for --alpha-mode scaled. Aligned elementwise; keep them that way.
-    np.save(Path(OUT_DIR) / "pool_scales.npy", pool_scales)
-    np.save(Path(OUT_DIR) / "pool_indices.npy", feature_pool)
+    np.save(
+        Path(OUT_DIR) / f"alpha_pilot_mean_signed_dp{suffix}.npy",
+        np.array([r["mean_signed_dp"] for r in rows]),
+    )
+    if readout == "probe":
+        np.save(Path(OUT_DIR) / "candidate_scales.npy", scales)
+        np.save(Path(OUT_DIR) / "candidate_indices.npy", candidates)
+        np.save(Path(OUT_DIR) / "pilot_row_indices.npy", pilot_rows)
+        # pool_scales / pool_indices are what utils.resolve_steering_alphas
+        # consumes for --alpha-mode scaled. Aligned elementwise; keep them so.
+        np.save(Path(OUT_DIR) / "pool_scales.npy", pool_scales)
+        np.save(Path(OUT_DIR) / "pool_indices.npy", feature_pool)
     print(f"\nWrote {out_txt}")
 
 
 if __name__ == "__main__":
-    main()
+    _args = parse_args()
+    main(readout=_args.readout, out_dir=_args.out_dir)

@@ -42,4 +42,7 @@ Thumbs.db
 .idea/
 .vscode/
 
-outputs/7_shap_recompute/shap_values_raw.npy
+# Raw SHAP value matrices — regenerable from the pipeline (7_shap_recompute's
+# copy alone is ~524MB, over GitHub's 100MB hard limit), never worth tracking.
+# Matches under any run's outputs dir (outputs/, run1/outputs/, run2/outputs/, ...).
+**/shap_values_raw.npy

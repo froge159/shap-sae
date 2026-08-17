@@ -1,0 +1,19 @@
+{
+  "dir": "run2/outputs/local_shap_faithfulness",
+  "blocks": {
+    "A:importance": {
+      "n": 100,
+      "mean_local": 0.34465529095734687,
+      "mean_global": -0.22338328270219723,
+      "mean_gap": 0.568038573659544,
+      "median_gap": 0.5473781752993201,
+      "frac_local_wins": 1.0,
+      "wilcoxon_stat": 0.0,
+      "wilcoxon_p": 3.896559845095909e-18,
+      "gap_ci95": [
+        0.524071406483953,
+        0.610900841888837
+      ]
+    }
+  }
+}

@@ -48,6 +48,7 @@ if str(_SRC) not in sys.path:
 
 from utils import (
     CANONICAL_SEED,
+    benjamini_hochberg,
     checkpoint_path,
     eval_sentences,
     last_real_token_index,
@@ -55,12 +56,21 @@ from utils import (
     output_path,
     resolve_steering_alphas,
     sample_eval_rows,
+    sign_agreement_test,
 )
 
 # Causal effects are measured on the held-out rows the attributions describe,
 # not on val. Nesting makes these the first N_STEER_EVAL rows of the set
 # 7_shap_recompute / 8_feature_ranking scored.
 N_STEER_EVAL = 1000
+
+
+SELECTIONS = ("top", "random", "all", "top-pos", "top-neg")
+
+
+def selection_tag(selection: str) -> str:
+    """Filename-safe form of a --selection value ('top-pos' -> 'toppos')."""
+    return selection.replace("-", "")
 
 
 def get_shap_candidates(
@@ -73,17 +83,35 @@ def get_shap_candidates(
     """
     Fixed candidate set from the filtered feature pool.
 
-    selection="top":    top-k by |SHAP|
-    selection="random": k features drawn uniformly (without replacement)
+    selection="top":     top-k by |SHAP|
+    selection="random":  k features drawn uniformly (without replacement)
+    selection="all":     every filtered feature (k and seed ignored)
+    selection="top-pos": top-k by *signed* SHAP among features with Phi > 0
+    selection="top-neg": top-k by |SHAP| among features with Phi < 0
 
     `shap_scores` and ranking are over the filtered set only (aligned with
     `feature_indices`). Intervention uses the mapped global SAE ids.
-    `shap_scores` is unused when selection="random".
+    `shap_scores` is unused when selection="random" or "all".
+
+    Why "all" exists: the headline faithfulness rho is computed over k=20
+    features, which is a small enough n that the confidence interval on Spearman
+    rho spans most of [-1, 1]. Scoring the whole pool raises n per test from 20
+    to len(feature_indices) without any resampling, and — unlike "random" — is
+    deterministic, so it carries no seed-draw luck at all.
+
+    Why the sign-stratified selections exist: "top" mixes positive- and
+    negative-Phi features, so a systematic sign inversion (features SHAP calls
+    positive moving the logit *down*) partly cancels within the candidate set and
+    shows up only as a muddy directional rho. Scoring one sign at a time makes
+    the binomial sign test in `utils.sign_agreement_test` interpretable.
 
     Returns
     -------
-    local_idx : (k,) indices into the filtered score vectors
-    global_idx : (k,) global SAE feature indices for intervention
+    local_idx : (k',) indices into the filtered score vectors
+    global_idx : (k',) global SAE feature indices for intervention
+
+    k' == k except for "all" (== n) and the sign-stratified modes, which are
+    capped by how many features carry that sign.
     """
     n = len(feature_indices)
     k = min(k, n)
@@ -92,8 +120,24 @@ def get_shap_candidates(
     elif selection == "random":
         rng = np.random.default_rng(seed)
         local_idx = rng.choice(n, size=k, replace=False)
+    elif selection == "all":
+        local_idx = np.arange(n)
+    elif selection in ("top-pos", "top-neg"):
+        scores = np.asarray(shap_scores, dtype=np.float64)
+        pool = np.flatnonzero(scores > 0 if selection == "top-pos" else scores < 0)
+        if pool.size == 0:
+            raise ValueError(
+                f"selection={selection!r} but no filtered feature has that Phi sign"
+            )
+        order = np.argsort(np.abs(scores[pool]))[::-1][:k]
+        local_idx = pool[order]
+        if len(local_idx) < k:
+            print(
+                f"NOTE: selection={selection} yielded only {len(local_idx)} of the "
+                f"requested k={k} features (that is how many carry that sign)."
+            )
     else:
-        raise ValueError(f"Unknown selection={selection!r}; expected 'top' or 'random'")
+        raise ValueError(f"Unknown selection={selection!r}; expected one of {SELECTIONS}")
     global_idx = feature_indices[local_idx]
     return local_idx, global_idx
 
@@ -133,12 +177,36 @@ def orient_signed_effects(delta_signed: dict, mode: str) -> dict:
     raise ValueError(f"Unknown mode={mode!r}; expected 'ablation' or 'steering'")
 
 
+def faithfulness_stats(
+    method_scores_by_name: dict,
+    delta_abs: dict,
+    delta_signed: dict,
+    mode: str,
+) -> dict[str, dict]:
+    """
+    Every faithfulness test of one run as {"<method>:<kind>": {"rho", "p"}}.
+
+    Split out from `report_faithfulness` so the numbers can be written to a
+    machine-readable sidecar and fed to `utils.benjamini_hochberg` without
+    re-parsing the rendered table.
+    """
+    oriented = orient_signed_effects(delta_signed, mode)
+    stats: dict[str, dict] = {}
+    for name, scores in method_scores_by_name.items():
+        rho_i, p_i = faithfulness_correlation(scores, delta_abs, importance=True)
+        stats[f"{name}:importance"] = {"rho": float(rho_i), "p": float(p_i)}
+        rho_d, p_d = faithfulness_correlation(scores, oriented, importance=False)
+        stats[f"{name}:directional"] = {"rho": float(rho_d), "p": float(p_d)}
+    return stats
+
+
 def report_faithfulness(
     method_scores_by_name: dict,
     delta_abs: dict,
     delta_signed: dict,
     mode: str,
     header: str = "",
+    bh_correction: bool = False,
 ) -> str:
     """
     Importance and directional faithfulness for each ranking method.
@@ -146,6 +214,12 @@ def report_faithfulness(
     Returns the rendered table so the caller can write it to disk. These are the
     headline numbers of the whole comparison; printing them to stdout only (as
     this used to) meant a completed run left no record of its own result.
+
+    `bh_correction=False` reproduces the historical output byte for byte, so
+    existing `faithfulness_*.txt` artifacts stay comparable. Setting it True
+    appends a Benjamini-Hochberg block over this run's 8-test family (4 methods x
+    2 correlation types) — worth reading before calling any single p<0.05 here a
+    result, since 8 uncorrected tests yield one by chance under a complete null.
     """
     lines = []
     if header:
@@ -164,6 +238,24 @@ def report_faithfulness(
     for name, scores in method_scores_by_name.items():
         rho, p = faithfulness_correlation(scores, oriented, importance=False)
         lines.append(f"  {name:14s}  rho={rho:+.3f}  p={p:.4f}")
+
+    if bh_correction:
+        stats = faithfulness_stats(
+            method_scores_by_name, delta_abs, delta_signed, mode
+        )
+        corrected = benjamini_hochberg({k: v["p"] for k, v in stats.items()})
+        lines.append("")
+        lines.append(
+            f"Benjamini-Hochberg FDR correction (family = {len(corrected)} tests "
+            "in this run, alpha=0.05):"
+        )
+        for name, row in corrected.items():
+            flag = "*" if row["reject"] else " "
+            lines.append(
+                f"  {name:28s}  p={row['p']:.4f}  q={row['q']:.4f} {flag}"
+            )
+        n_rej = sum(r["reject"] for r in corrected.values())
+        lines.append(f"  {n_rej} of {len(corrected)} survive FDR correction.")
 
     text = "\n".join(lines) + "\n"
     print(text)
@@ -469,12 +561,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--k", type=int, default=20, help="Candidate features")
     p.add_argument(
         "--selection",
-        choices=("top", "random"),
+        choices=SELECTIONS,
         default="random",
         help=(
             "'random' = uniform over the filtered set (headline; unbiased); "
             "'top' = top-k by |SHAP|, which range-restricts SHAP on the scored "
-            "set and deflates its rho relative to the other methods"
+            "set and deflates its rho relative to the other methods; "
+            "'all' = the whole filtered pool (max power, ignores --k/--seed); "
+            "'top-pos'/'top-neg' = sign-stratified top-k, for the sign test"
         ),
     )
     p.add_argument("--seed", type=int, default=0, help="Seed for --selection random")
@@ -483,6 +577,15 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=N_STEER_EVAL,
         help="Held-out rows to score (prefix of the canonical sample)",
+    )
+    p.add_argument(
+        "--bh-correction",
+        action="store_true",
+        help=(
+            "Append a Benjamini-Hochberg block to the table and write a "
+            "faithfulness_<tag>_bh.json sidecar (does not alter the existing "
+            "faithfulness_<tag>.txt body)"
+        ),
     )
     p.add_argument("--out-dir", type=Path, default=output_path("9_steer"))
     return p.parse_args()
@@ -540,10 +643,16 @@ if __name__ == "__main__":
     local_top, global_candidates = get_shap_candidates(
         shap_filtered, feature_indices, k=K, selection=SELECTION, seed=SEED
     )
-    if SELECTION == "top":
-        sel_desc = f"top-{K} by |SHAP|"
-    else:
-        sel_desc = f"{K} random (seed={SEED})"
+    # "all" and the sign-stratified modes decide their own size; K drives the
+    # output tag and the small-n warning, so re-derive it from what came back.
+    K = len(global_candidates)
+    sel_desc = {
+        "top": f"top-{K} by |SHAP|",
+        "random": f"{K} random (seed={SEED})",
+        "all": f"all {K} filtered features (deterministic)",
+        "top-pos": f"top-{K} by signed SHAP among Phi>0",
+        "top-neg": f"top-{K} by |SHAP| among Phi<0",
+    }[SELECTION]
     print(
         f"Fixed candidate set: {sel_desc} among "
         f"{len(feature_indices)} filtered features"
@@ -628,13 +737,41 @@ if __name__ == "__main__":
         )
     )
     faith_text = report_faithfulness(
-        method_scores, delta_abs, delta_signed, MODE, header=header
+        method_scores,
+        delta_abs,
+        delta_signed,
+        MODE,
+        header=header,
+        bh_correction=args.bh_correction,
     )
+
+    # Sign test: does sign(attribution) predict sign(effect) better than chance?
+    # Only meaningful on a sign-pure candidate set — on a mixed-sign set a
+    # systematic inversion partly cancels. See utils.sign_agreement_test.
+    sign_block = None
+    if SELECTION in ("top-pos", "top-neg"):
+        oriented = orient_signed_effects(delta_signed, MODE)
+        sign_block = {
+            name: sign_agreement_test(
+                {int(f): float(scores[int(f)]) for f in global_candidates}, oriented
+            )
+            for name, scores in method_scores.items()
+        }
+        print(f"Sign agreement ({SELECTION}, oriented for mode={MODE}):")
+        for name, row in sign_block.items():
+            if row["n"] == 0:
+                print(f"  {name:14s}  n/a (every delta was exactly 0)")
+                continue
+            print(
+                f"  {name:14s}  {row['n_agree']}/{row['n']} agree "
+                f"({row['agreement_rate']:.3f})  two-sided p={row['binom_two_sided_p']:.4f}"
+                f"  inversion(less) p={row['binom_less_p']:.4f}"
+            )
 
     # Every artifact is tagged with the configuration that produced it. These
     # files used to have config-independent names, so a second run into the same
     # directory silently replaced the candidate set the first run's JSON refers to.
-    tag = f"{MODE}_{SELECTION}_k{K}"
+    tag = f"{MODE}_{selection_tag(SELECTION)}_k{K}"
     out_dir = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     # JSON, not np.save: these are dict[int, float], and np.save would pickle
@@ -656,11 +793,32 @@ if __name__ == "__main__":
                 "n_eval": int(len(steer_eval_idx)),
                 "delta_abs": {str(k): v for k, v in delta_abs.items()},
                 "delta_signed": {str(k): v for k, v in delta_signed.items()},
+                # Additive: absent for the historical selections, so old readers
+                # of this schema keep working.
+                **({"sign_agreement": sign_block} if sign_block else {}),
             },
             f,
             indent=2,
         )
     (out_dir / f"faithfulness_{tag}.txt").write_text(faith_text)
+    if args.bh_correction:
+        stats = faithfulness_stats(method_scores, delta_abs, delta_signed, MODE)
+        corrected = benjamini_hochberg({k: v["p"] for k, v in stats.items()})
+        with open(out_dir / f"faithfulness_{tag}_bh.json", "w") as f:
+            json.dump(
+                {
+                    "mode": MODE,
+                    "selection": SELECTION,
+                    "k": K,
+                    "family_size": len(corrected),
+                    "alpha": 0.05,
+                    "tests": {
+                        name: {**stats[name], **corrected[name]} for name in stats
+                    },
+                },
+                f,
+                indent=2,
+            )
     np.save(out_dir / f"shap_top_local_{tag}.npy", local_top)
     np.save(out_dir / f"shap_top_global_{tag}.npy", global_candidates)
     np.save(out_dir / f"eval_indices_{tag}.npy", steer_eval_idx)

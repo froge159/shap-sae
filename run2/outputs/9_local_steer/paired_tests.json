@@ -1,0 +1,94 @@
+{
+  "dir": "run2/outputs/9_local_steer",
+  "blocks": {
+    "A:importance": {
+      "n": 100,
+      "mean_local": 0.4136432537366897,
+      "mean_global": -0.268580122476254,
+      "mean_gap": 0.6822233762129437,
+      "median_gap": 0.6737722184826908,
+      "frac_local_wins": 1.0,
+      "wilcoxon_stat": 0.0,
+      "wilcoxon_p": 3.896559845095909e-18,
+      "gap_ci95": [
+        0.643869817246357,
+        0.7195984858564379
+      ]
+    },
+    "A:directional": {
+      "n": 100,
+      "mean_local": 0.13526629385555772,
+      "mean_global": -0.1583123001224147,
+      "mean_gap": 0.29357859397797237,
+      "median_gap": 0.2107341002733279,
+      "frac_local_wins": 0.86,
+      "wilcoxon_stat": 241.0,
+      "wilcoxon_p": 4.0576791041155326e-15,
+      "gap_ci95": [
+        0.2327525599105809,
+        0.3605093686443024
+      ]
+    },
+    "B:importance": {
+      "n": 100,
+      "mean_local": 0.20163406871766004,
+      "mean_global": 0.28510187361657946,
+      "mean_gap": -0.08346780489891945,
+      "median_gap": -0.06629139694155176,
+      "frac_local_wins": 0.42,
+      "wilcoxon_stat": 1990.5,
+      "wilcoxon_p": 0.06609374716839772,
+      "gap_ci95": [
+        -0.16149344327627999,
+        -0.0113936803650426
+      ]
+    },
+    "B:directional": {
+      "n": 100,
+      "mean_local": 0.14364761219172986,
+      "mean_global": -0.31101022661548977,
+      "mean_gap": 0.45465783880721966,
+      "median_gap": 0.39697802197802196,
+      "frac_local_wins": 0.88,
+      "wilcoxon_stat": 187.0,
+      "wilcoxon_p": 9.069355728388342e-16,
+      "gap_ci95": [
+        0.3756017187856004,
+        0.5402470818655029
+      ]
+    }
+  },
+  "decomposition": {
+    "target": "block A importance gap (rho_local - rho_global)",
+    "frac_active": {
+      "label": "gap ~ frac_active",
+      "slope": -0.3839718089230089,
+      "intercept": 0.8705458337849643,
+      "r2": 0.019215065093368847,
+      "p": 0.16900548599578594,
+      "n": 100
+    },
+    "n_active_raw": {
+      "label": "gap ~ n_active",
+      "slope": -0.0036232079565388835,
+      "intercept": 0.7335280008775343,
+      "r2": 0.0017420433871792463,
+      "p": 0.6801120685051607,
+      "n": 100
+    },
+    "frac_active_ctrl_size": {
+      "labels": [
+        "frac_active",
+        "n_cands"
+      ],
+      "intercept": -0.3565972443154724,
+      "coefs": [
+        -0.5719174841096767,
+        0.045762148448854276
+      ],
+      "r2": 0.11970015658032096,
+      "n": 100
+    },
+    "mean_frac_active": 0.4904590732851995
+  }
+}

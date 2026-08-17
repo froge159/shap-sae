@@ -1,0 +1,15 @@
+MLP arm - faithfulness
+mode=steering  selection=random  k=20  seed=0  n_eval=1000
+alpha: scaled alpha = +0.3316 x scale_i / 0.6807 (range +0.2319 .. +0.9388)
+NOTE: rho over n=20 features x 4 methods x 2 correlation types, no multiple-comparison control - p-values are descriptive.
+
+Importance faithfulness  (Spearman rho of |attribution| vs |delta|):
+  SHAP            rho=-0.298  p=0.2023
+  Probe saliency  rho=-0.146  p=0.5395
+  IG              rho=-0.227  p=0.3357
+  GA              rho=+0.202  p=0.3943
+Directional faithfulness (Spearman rho of attribution vs delta; positive = faithful under mode=steering):
+  SHAP            rho=+0.003  p=0.9900
+  Probe saliency  n/a (magnitude-only score, no direction)
+  IG              rho=-0.059  p=0.8060
+  GA              rho=+0.171  p=0.4699
