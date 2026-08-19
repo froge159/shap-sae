@@ -1,0 +1,33 @@
+Linear (logistic) arm - multi-seed faithfulness sweep
+mode=steering  selection=random  k=20  seeds=0-9  n_eval=1000
+alpha: scaled alpha = +0.3316 x scale_i / 0.6807 (range +0.2155 .. +5.92)
+union features intervened on: 98
+Pooled Benjamini-Hochberg over all 80 tests (10 seeds x 8 tests): 0 survive at FDR 0.05.
+
+test                          mean rho     std             95% CI  wilcoxon p  ref rho   ref p
+-----------------------------------------------------------------------------------------------
+SHAP:importance                 +0.264   0.184    [+0.149,+0.382]      0.0039   -0.083   1.000
+SHAP:directional                -0.022   0.227    [-0.155,+0.125]      0.7695   +0.119   0.700
+Probe weights:importance        +0.140   0.197    [+0.021,+0.262]      0.0488   -0.186   0.500
+Probe weights:directional       +0.320   0.188    [+0.203,+0.433]      0.0039   -0.011   1.000
+IG:importance                   +0.264   0.184    [+0.149,+0.382]      0.0039   -0.083   1.000
+IG:directional                  -0.022   0.227    [-0.155,+0.125]      0.7695   +0.119   0.700
+GA:importance                   +0.264   0.184    [+0.149,+0.382]      0.0039   -0.083   1.000
+GA:directional                  -0.022   0.227    [-0.155,+0.125]      0.7695   +0.119   0.700
+
+Reading: 'wilcoxon p' tests whether the typical rho across draws differs from 0.
+'ref p' is the fraction of draws with |rho| at least as large as the reference
+seed's - a small value means the headline run was an unusually extreme draw.
+
+Per-seed rho:
+   seed SHAP:importanc SHAP:direction Probe weights: Probe weights:  IG:importance IG:directional  GA:importance GA:directional
+      0         -0.083         +0.119         -0.186         -0.011         -0.083         +0.119         -0.083         +0.119
+      1         +0.441         +0.086         +0.192         +0.358         +0.441         +0.086         +0.441         +0.086
+      2         +0.277         -0.211         +0.132         +0.186         +0.277         -0.211         +0.277         -0.211
+      3         +0.299         -0.299         +0.005         +0.262         +0.299         -0.299         +0.299         -0.299
+      4         +0.098         -0.072         +0.140         +0.507         +0.098         -0.072         +0.098         -0.072
+      5         +0.438         -0.335         +0.147         +0.314         +0.438         -0.335         +0.438         -0.335
+      6         +0.164         +0.380         +0.526         +0.361         +0.164         +0.380         +0.164         +0.380
+      7         +0.251         +0.280         +0.301         +0.597         +0.251         +0.280         +0.251         +0.280
+      8         +0.162         -0.149         +0.271         +0.547         +0.162         -0.149         +0.162         -0.149
+      9         +0.589         -0.017         -0.123         +0.080         +0.589         -0.017         +0.589         -0.017

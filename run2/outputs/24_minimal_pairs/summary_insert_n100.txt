@@ -1,0 +1,27 @@
+Minimal-pair known-ground-truth validation
+============================================================
+edit=insert  n_pairs=100  seed=42  distractors=random
+
+
+1) Readout validity (does the known edit move the logit diff correctly?)
+   sign accuracy      = 0.700  (0.5 = chance)
+   mean |text delta|  = 0.4366 logits
+
+2) Ground-truth feature recovery (AUROC for ranking edit-carrying
+   features above distractors) and 3) causal recovery (Spearman of
+   |attribution| vs |effect of ablating that feature|):
+
+   method            AUROC moved  rho recovery
+   -------------------------------------------
+   local_SHAP              0.792         0.536
+   global_SHAP             0.792         0.458
+   Probe weights           0.610         0.167
+   IG                      0.792         0.458
+   GA                      0.792         0.458
+
+Reading: AUROC ~0.5 means the method cannot tell which features actually
+carried a known sentiment edit — that is a failure on a case with a known
+right answer, so it constrains the interpretation of the null result on
+natural text. AUROC well above 0.5 with near-zero faithfulness rho on
+natural text points the other way: the harness works, and the methods are
+genuinely unfaithful there.

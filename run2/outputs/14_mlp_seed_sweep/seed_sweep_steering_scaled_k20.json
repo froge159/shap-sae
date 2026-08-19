@@ -1,0 +1,793 @@
+{
+  "mode": "steering",
+  "alpha": 0.3316,
+  "alpha_mode": "scaled",
+  "k": 20,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "ref_seed": 0,
+  "n_eval": 1000,
+  "n_union_features": 98,
+  "per_seed": {
+    "0": {
+      "SHAP:importance": {
+        "rho": -0.29774436090225564,
+        "p": 0.2023199860189742
+      },
+      "SHAP:directional": {
+        "rho": 0.003007518796992481,
+        "p": 0.989959729518499
+      },
+      "Probe saliency:importance": {
+        "rho": -0.14586466165413534,
+        "p": 0.5394664944297438
+      },
+      "IG:importance": {
+        "rho": -0.2270676691729323,
+        "p": 0.335674431013418
+      },
+      "IG:directional": {
+        "rho": -0.05864661654135337,
+        "p": 0.8059928433862232
+      },
+      "GA:importance": {
+        "rho": 0.20150375939849624,
+        "p": 0.39426050476127356
+      },
+      "GA:directional": {
+        "rho": 0.17142857142857143,
+        "p": 0.46988617281087536
+      }
+    },
+    "1": {
+      "SHAP:importance": {
+        "rho": 0.4466165413533834,
+        "p": 0.04837283310926691
+      },
+      "SHAP:directional": {
+        "rho": -0.02857142857142857,
+        "p": 0.9048224147367736
+      },
+      "Probe saliency:importance": {
+        "rho": 0.048120300751879695,
+        "p": 0.8403389659546907
+      },
+      "IG:importance": {
+        "rho": 0.3789473684210526,
+        "p": 0.09941288322147487
+      },
+      "IG:directional": {
+        "rho": 0.037593984962406006,
+        "p": 0.8749652018566715
+      },
+      "GA:importance": {
+        "rho": 0.28421052631578947,
+        "p": 0.2245845982112046
+      },
+      "GA:directional": {
+        "rho": 0.2992481203007519,
+        "p": 0.19994045290488688
+      }
+    },
+    "2": {
+      "SHAP:importance": {
+        "rho": 0.1518796992481203,
+        "p": 0.5226819111403138
+      },
+      "SHAP:directional": {
+        "rho": -0.3157894736842105,
+        "p": 0.1749941354156349
+      },
+      "Probe saliency:importance": {
+        "rho": -0.2601503759398496,
+        "p": 0.2679803337219606
+      },
+      "IG:importance": {
+        "rho": 0.13383458646616542,
+        "p": 0.5737559530736435
+      },
+      "IG:directional": {
+        "rho": 0.12932330827067667,
+        "p": 0.586852724489982
+      },
+      "GA:importance": {
+        "rho": 0.25112781954887214,
+        "p": 0.2855217106335981
+      },
+      "GA:directional": {
+        "rho": 0.06616541353383458,
+        "p": 0.7816639121085741
+      }
+    },
+    "3": {
+      "SHAP:importance": {
+        "rho": 0.19097744360902258,
+        "p": 0.41992697220250486
+      },
+      "SHAP:directional": {
+        "rho": -0.2781954887218045,
+        "p": 0.23497379059889353
+      },
+      "Probe saliency:importance": {
+        "rho": -0.4947368421052631,
+        "p": 0.026578647405457144
+      },
+      "IG:importance": {
+        "rho": -0.08872180451127819,
+        "p": 0.7099206278927328
+      },
+      "IG:directional": {
+        "rho": -0.1969924812030075,
+        "p": 0.40515233009814566
+      },
+      "GA:importance": {
+        "rho": -0.11879699248120301,
+        "p": 0.6178918280262936
+      },
+      "GA:directional": {
+        "rho": 0.13383458646616542,
+        "p": 0.5737559530736435
+      }
+    },
+    "4": {
+      "SHAP:importance": {
+        "rho": 0.3082706766917293,
+        "p": 0.18605556077810148
+      },
+      "SHAP:directional": {
+        "rho": -0.11278195488721804,
+        "p": 0.6359170579042354
+      },
+      "Probe saliency:importance": {
+        "rho": 0.07669172932330826,
+        "p": 0.74793344754194
+      },
+      "IG:importance": {
+        "rho": 0.26315789473684204,
+        "p": 0.26228712287542844
+      },
+      "IG:directional": {
+        "rho": -0.06616541353383458,
+        "p": 0.7816639121085741
+      },
+      "GA:importance": {
+        "rho": 0.26917293233082706,
+        "p": 0.25113145369079015
+      },
+      "GA:directional": {
+        "rho": -0.21954887218045113,
+        "p": 0.3523456773115152
+      }
+    },
+    "5": {
+      "SHAP:importance": {
+        "rho": 0.5654135338345864,
+        "p": 0.00937431775063153
+      },
+      "SHAP:directional": {
+        "rho": -0.06616541353383458,
+        "p": 0.7816639121085741
+      },
+      "Probe saliency:importance": {
+        "rho": 0.08421052631578946,
+        "p": 0.7241036435108114
+      },
+      "IG:importance": {
+        "rho": 0.3714285714285714,
+        "p": 0.10687070696592824
+      },
+      "IG:directional": {
+        "rho": -0.18496240601503755,
+        "p": 0.43498614362285265
+      },
+      "GA:importance": {
+        "rho": 0.3789473684210526,
+        "p": 0.09941288322147487
+      },
+      "GA:directional": {
+        "rho": -0.21353383458646616,
+        "p": 0.3660206383395141
+      }
+    },
+    "6": {
+      "SHAP:importance": {
+        "rho": -0.03157894736842105,
+        "p": 0.8948543863933639
+      },
+      "SHAP:directional": {
+        "rho": 0.09774436090225563,
+        "p": 0.6818324385070821
+      },
+      "Probe saliency:importance": {
+        "rho": 0.4646616541353384,
+        "p": 0.03900261948616538
+      },
+      "IG:importance": {
+        "rho": 0.04360902255639097,
+        "p": 0.8551479470173744
+      },
+      "IG:directional": {
+        "rho": 0.037593984962406006,
+        "p": 0.8749652018566715
+      },
+      "GA:importance": {
+        "rho": 0.07368421052631578,
+        "p": 0.7575286998643431
+      },
+      "GA:directional": {
+        "rho": 0.030075187969924807,
+        "p": 0.8998365956859304
+      }
+    },
+    "7": {
+      "SHAP:importance": {
+        "rho": 0.17744360902255638,
+        "p": 0.4542034838793193
+      },
+      "SHAP:directional": {
+        "rho": 0.1413533834586466,
+        "p": 0.552214438632242
+      },
+      "Probe saliency:importance": {
+        "rho": 0.23909774436090225,
+        "p": 0.30998626440604465
+      },
+      "IG:importance": {
+        "rho": 0.03458646616541353,
+        "p": 0.8849015088305833
+      },
+      "IG:directional": {
+        "rho": 0.10375939849624059,
+        "p": 0.6633257542362447
+      },
+      "GA:importance": {
+        "rho": -0.1789473684210526,
+        "p": 0.45032544160933996
+      },
+      "GA:directional": {
+        "rho": 0.10375939849624059,
+        "p": 0.6633257542362447
+      }
+    },
+    "8": {
+      "SHAP:importance": {
+        "rho": -0.0706766917293233,
+        "p": 0.7671582206450904
+      },
+      "SHAP:directional": {
+        "rho": 0.03157894736842105,
+        "p": 0.8948543863933639
+      },
+      "Probe saliency:importance": {
+        "rho": 0.04060150375939849,
+        "p": 0.8650468790077723
+      },
+      "IG:importance": {
+        "rho": -0.13233082706766916,
+        "p": 0.5781074593622942
+      },
+      "IG:directional": {
+        "rho": -0.07969924812030074,
+        "p": 0.7383737490149301
+      },
+      "GA:importance": {
+        "rho": 0.10075187969924812,
+        "p": 0.6725564354857819
+      },
+      "GA:directional": {
+        "rho": -0.06165413533834586,
+        "p": 0.7962393511384775
+      }
+    },
+    "9": {
+      "SHAP:importance": {
+        "rho": 0.4466165413533834,
+        "p": 0.04837283310926691
+      },
+      "SHAP:directional": {
+        "rho": -0.11127819548872178,
+        "p": 0.6404548402871416
+      },
+      "Probe saliency:importance": {
+        "rho": -0.5548872180451127,
+        "p": 0.011103504265934592
+      },
+      "IG:importance": {
+        "rho": 0.49022556390977434,
+        "p": 0.02821080561889401
+      },
+      "IG:directional": {
+        "rho": 0.13834586466165413,
+        "p": 0.5607873732874131
+      },
+      "GA:importance": {
+        "rho": 0.5383458646616541,
+        "p": 0.014335462396793609
+      },
+      "GA:directional": {
+        "rho": 0.2706766917293233,
+        "p": 0.2483905691366973
+      }
+    }
+  },
+  "aggregate": {
+    "SHAP:importance": {
+      "n_seeds": 10,
+      "mean": 0.18872180451127815,
+      "std": 0.2536073618620241,
+      "min": -0.29774436090225564,
+      "max": 0.5654135338345864,
+      "wilcoxon_stat": 9.0,
+      "wilcoxon_p": 0.0625,
+      "bootstrap_ci95": [
+        0.024345864661654136,
+        0.3421052631578947
+      ],
+      "ref_seed": 0,
+      "ref_seed_rho": -0.29774436090225564,
+      "ref_seed_outlier_p": 0.5
+    },
+    "SHAP:directional": {
+      "n_seeds": 10,
+      "mean": -0.06390977443609022,
+      "std": 0.14039549058211542,
+      "min": -0.3157894736842105,
+      "max": 0.1413533834586466,
+      "wilcoxon_stat": 17.0,
+      "wilcoxon_p": 0.322265625,
+      "bootstrap_ci95": [
+        -0.15413533834586465,
+        0.020003759398496187
+      ],
+      "ref_seed": 0,
+      "ref_seed_rho": 0.003007518796992481,
+      "ref_seed_outlier_p": 1.0
+    },
+    "Probe saliency:importance": {
+      "n_seeds": 10,
+      "mean": -0.05022556390977441,
+      "std": 0.30106615158963357,
+      "min": -0.5548872180451127,
+      "max": 0.4646616541353384,
+      "wilcoxon_stat": 24.0,
+      "wilcoxon_p": 0.76953125,
+      "bootstrap_ci95": [
+        -0.23489473684210527,
+        0.13579699248120292
+      ],
+      "ref_seed": 0,
+      "ref_seed_rho": -0.14586466165413534,
+      "ref_seed_outlier_p": 0.6
+    },
+    "IG:importance": {
+      "n_seeds": 10,
+      "mean": 0.12676691729323306,
+      "std": 0.2298667786731878,
+      "min": -0.2270676691729323,
+      "max": 0.49022556390977434,
+      "wilcoxon_stat": 13.0,
+      "wilcoxon_p": 0.16015625,
+      "bootstrap_ci95": [
+        -0.010984962406015042,
+        0.2703796992481202
+      ],
+      "ref_seed": 0,
+      "ref_seed_rho": -0.2270676691729323,
+      "ref_seed_outlier_p": 0.5
+    },
+    "IG:directional": {
+      "n_seeds": 10,
+      "mean": -0.01398496240601503,
+      "std": 0.11605486625009204,
+      "min": -0.1969924812030075,
+      "max": 0.13834586466165413,
+      "wilcoxon_stat": 24.0,
+      "wilcoxon_p": 0.751953125,
+      "bootstrap_ci95": [
+        -0.08796992481203006,
+        0.05714285714285714
+      ],
+      "ref_seed": 0,
+      "ref_seed_rho": -0.05864661654135337,
+      "ref_seed_outlier_p": 0.8
+    },
+    "GA:importance": {
+      "n_seeds": 10,
+      "mean": 0.18,
+      "std": 0.20688915047293663,
+      "min": -0.1789473684210526,
+      "max": 0.5383458646616541,
+      "wilcoxon_stat": 7.0,
+      "wilcoxon_p": 0.037109375,
+      "bootstrap_ci95": [
+        0.04946992481203008,
+        0.30827819548872165
+      ],
+      "ref_seed": 0,
+      "ref_seed_rho": 0.20150375939849624,
+      "ref_seed_outlier_p": 0.6
+    },
+    "GA:directional": {
+      "n_seeds": 10,
+      "mean": 0.058045112781954886,
+      "std": 0.17031454408124833,
+      "min": -0.21954887218045113,
+      "max": 0.2992481203007519,
+      "wilcoxon_stat": 17.0,
+      "wilcoxon_p": 0.322265625,
+      "bootstrap_ci95": [
+        -0.04977819548872181,
+        0.161203007518797
+      ],
+      "ref_seed": 0,
+      "ref_seed_rho": 0.17142857142857143,
+      "ref_seed_outlier_p": 0.5
+    }
+  },
+  "pooled_bh": {
+    "family_size": 70,
+    "n_reject": 0,
+    "tests": {
+      "seed0:SHAP:importance": {
+        "p": 0.2023199860189742,
+        "q": 0.8932677790732021,
+        "reject": false
+      },
+      "seed0:SHAP:directional": {
+        "p": 0.989959729518499,
+        "q": 0.989959729518499,
+        "reject": false
+      },
+      "seed0:Probe saliency:importance": {
+        "p": 0.5394664944297438,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed0:IG:importance": {
+        "p": 0.335674431013418,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed0:IG:directional": {
+        "p": 0.8059928433862232,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed0:GA:importance": {
+        "p": 0.39426050476127356,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed0:GA:directional": {
+        "p": 0.46988617281087536,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed1:SHAP:importance": {
+        "p": 0.04837283310926691,
+        "q": 0.4232622897060855,
+        "reject": false
+      },
+      "seed1:SHAP:directional": {
+        "p": 0.9048224147367736,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed1:Probe saliency:importance": {
+        "p": 0.8403389659546907,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed1:IG:importance": {
+        "p": 0.09941288322147487,
+        "q": 0.6800863170559069,
+        "reject": false
+      },
+      "seed1:IG:directional": {
+        "p": 0.8749652018566715,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed1:GA:importance": {
+        "p": 0.2245845982112046,
+        "q": 0.8932677790732021,
+        "reject": false
+      },
+      "seed1:GA:directional": {
+        "p": 0.19994045290488688,
+        "q": 0.8932677790732021,
+        "reject": false
+      },
+      "seed2:SHAP:importance": {
+        "p": 0.5226819111403138,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed2:SHAP:directional": {
+        "p": 0.1749941354156349,
+        "q": 0.8932677790732021,
+        "reject": false
+      },
+      "seed2:Probe saliency:importance": {
+        "p": 0.2679803337219606,
+        "q": 0.8932677790732021,
+        "reject": false
+      },
+      "seed2:IG:importance": {
+        "p": 0.5737559530736435,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed2:IG:directional": {
+        "p": 0.586852724489982,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed2:GA:importance": {
+        "p": 0.2855217106335981,
+        "q": 0.9084781701978121,
+        "reject": false
+      },
+      "seed2:GA:directional": {
+        "p": 0.7816639121085741,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed3:SHAP:importance": {
+        "p": 0.41992697220250486,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed3:SHAP:directional": {
+        "p": 0.23497379059889353,
+        "q": 0.8932677790732021,
+        "reject": false
+      },
+      "seed3:Probe saliency:importance": {
+        "p": 0.026578647405457144,
+        "q": 0.3949512786645162,
+        "reject": false
+      },
+      "seed3:IG:importance": {
+        "p": 0.7099206278927328,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed3:IG:directional": {
+        "p": 0.40515233009814566,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed3:GA:importance": {
+        "p": 0.6178918280262936,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed3:GA:directional": {
+        "p": 0.5737559530736435,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed4:SHAP:importance": {
+        "p": 0.18605556077810148,
+        "q": 0.8932677790732021,
+        "reject": false
+      },
+      "seed4:SHAP:directional": {
+        "p": 0.6359170579042354,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed4:Probe saliency:importance": {
+        "p": 0.74793344754194,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed4:IG:importance": {
+        "p": 0.26228712287542844,
+        "q": 0.8932677790732021,
+        "reject": false
+      },
+      "seed4:IG:directional": {
+        "p": 0.7816639121085741,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed4:GA:importance": {
+        "p": 0.25113145369079015,
+        "q": 0.8932677790732021,
+        "reject": false
+      },
+      "seed4:GA:directional": {
+        "p": 0.3523456773115152,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed5:SHAP:importance": {
+        "p": 0.00937431775063153,
+        "q": 0.33449412259185085,
+        "reject": false
+      },
+      "seed5:SHAP:directional": {
+        "p": 0.7816639121085741,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed5:Probe saliency:importance": {
+        "p": 0.7241036435108114,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed5:IG:importance": {
+        "p": 0.10687070696592824,
+        "q": 0.6800863170559069,
+        "reject": false
+      },
+      "seed5:IG:directional": {
+        "p": 0.43498614362285265,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed5:GA:importance": {
+        "p": 0.09941288322147487,
+        "q": 0.6800863170559069,
+        "reject": false
+      },
+      "seed5:GA:directional": {
+        "p": 0.3660206383395141,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed6:SHAP:importance": {
+        "p": 0.8948543863933639,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed6:SHAP:directional": {
+        "p": 0.6818324385070821,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed6:Probe saliency:importance": {
+        "p": 0.03900261948616538,
+        "q": 0.4232622897060855,
+        "reject": false
+      },
+      "seed6:IG:importance": {
+        "p": 0.8551479470173744,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed6:IG:directional": {
+        "p": 0.8749652018566715,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed6:GA:importance": {
+        "p": 0.7575286998643431,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed6:GA:directional": {
+        "p": 0.8998365956859304,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed7:SHAP:importance": {
+        "p": 0.4542034838793193,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed7:SHAP:directional": {
+        "p": 0.552214438632242,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed7:Probe saliency:importance": {
+        "p": 0.30998626440604465,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed7:IG:importance": {
+        "p": 0.8849015088305833,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed7:IG:directional": {
+        "p": 0.6633257542362447,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed7:GA:importance": {
+        "p": 0.45032544160933996,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed7:GA:directional": {
+        "p": 0.6633257542362447,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed8:SHAP:importance": {
+        "p": 0.7671582206450904,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed8:SHAP:directional": {
+        "p": 0.8948543863933639,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed8:Probe saliency:importance": {
+        "p": 0.8650468790077723,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed8:IG:importance": {
+        "p": 0.5781074593622942,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed8:IG:directional": {
+        "p": 0.7383737490149301,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed8:GA:importance": {
+        "p": 0.6725564354857819,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed8:GA:directional": {
+        "p": 0.7962393511384775,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed9:SHAP:importance": {
+        "p": 0.04837283310926691,
+        "q": 0.4232622897060855,
+        "reject": false
+      },
+      "seed9:SHAP:directional": {
+        "p": 0.6404548402871416,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed9:Probe saliency:importance": {
+        "p": 0.011103504265934592,
+        "q": 0.33449412259185085,
+        "reject": false
+      },
+      "seed9:IG:importance": {
+        "p": 0.02821080561889401,
+        "q": 0.3949512786645162,
+        "reject": false
+      },
+      "seed9:IG:directional": {
+        "p": 0.5607873732874131,
+        "q": 0.9179357830662921,
+        "reject": false
+      },
+      "seed9:GA:importance": {
+        "p": 0.014335462396793609,
+        "q": 0.33449412259185085,
+        "reject": false
+      },
+      "seed9:GA:directional": {
+        "p": 0.2483905691366973,
+        "q": 0.8932677790732021,
+        "reject": false
+      }
+    }
+  }
+}

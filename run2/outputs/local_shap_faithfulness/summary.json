@@ -11,5 +11,12 @@
   "std_rho_local": 0.17198449948548158,
   "std_rho_global": 0.22383135636143364,
   "frac_examples_local_gt_global": 1.0,
+  "mean_n_candidates": 27.48,
+  "mean_n_active_candidates": 14.23,
+  "active_mean_rho_local": 0.07623908650688838,
+  "active_mean_rho_global": 0.3711381518378422,
+  "active_std_rho_local": 0.3405318847434935,
+  "active_std_rho_global": 0.2138935363217214,
+  "active_frac_examples_local_gt_global": 0.27,
   "interpretation": "Local SHAP ranks per-example ablation effects better than global \u03a6 \u2192 averaging was likely a main error source."
 }

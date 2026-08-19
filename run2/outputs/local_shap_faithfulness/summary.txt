@@ -1,8 +1,19 @@
 Local DeepSHAP vs per-example ablation
 ==================================================
 target=lm  n=100  k_local=20  k_global=20
-mean Spearman ρ(|local φ| vs |Δ|)  = 0.345 ± 0.172
-mean Spearman ρ(|global Φ| vs |Δ|) = -0.223 ± 0.224
-fraction examples with ρ_local > ρ_global = 1.000
+
+[A] All candidates
+  mean Spearman ρ(|local φ| vs |Δ|)  = 0.345 ± 0.172
+  mean Spearman ρ(|global Φ| vs |Δ|) = -0.223 ± 0.224
+  fraction examples with ρ_local > ρ_global = 1.000
+
+[B] Active candidates only (control)
+    Globally-top features are usually inactive in any one sentence, and
+    ablating an inactive feature gives Δ = 0 exactly, while local |φ(x)|
+    tracks activity by construction. [B] removes that advantage.
+  mean active candidates = 14.2 of 27.5
+  mean Spearman ρ(|local φ| vs |Δ|)  = 0.076 ± 0.341
+  mean Spearman ρ(|global Φ| vs |Δ|) = 0.371 ± 0.214
+  fraction examples with ρ_local > ρ_global = 0.270
 
 Local SHAP ranks per-example ablation effects better than global Φ → averaging was likely a main error source.
