@@ -1,0 +1,25 @@
+MLP arm - faithfulness
+mode=steering  selection=all  k=116  seed=0  n_eval=1000  intervene_scope=last
+alpha: scaled alpha = +0.3316 x scale_i / 0.6807 (range +0.2155 .. +5.92)
+NOTE: intervene_scope='last' edits only the last real token, not every position - effect sizes are not comparable to the default 'all' scope runs.
+
+Importance faithfulness  (Spearman rho of |attribution| vs |delta|):
+  SHAP            rho=+0.279  p=0.0024
+  Probe saliency  rho=-0.011  p=0.9108
+  IG              rho=+0.278  p=0.0025
+  GA              rho=+0.197  p=0.0341
+Directional faithfulness (Spearman rho of attribution vs delta; positive = faithful under mode=steering):
+  SHAP            rho=-0.157  p=0.0925
+  Probe saliency  n/a (magnitude-only score, no direction)
+  IG              rho=-0.046  p=0.6209
+  GA              rho=-0.031  p=0.7389
+
+Benjamini-Hochberg FDR correction (family = 7 tests in this run, alpha=0.05):
+  SHAP:importance               p=0.0024  q=0.0088 *
+  SHAP:directional              p=0.0925  q=0.1618  
+  Probe saliency:importance     p=0.9108  q=0.9108  
+  IG:importance                 p=0.0025  q=0.0088 *
+  IG:directional                p=0.6209  q=0.8620  
+  GA:importance                 p=0.0341  q=0.0797  
+  GA:directional                p=0.7389  q=0.8620  
+  2 of 7 survive FDR correction.

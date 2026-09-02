@@ -266,20 +266,38 @@ def _apply_feature_intervention(
     feature_idx: int,
     mode: str,
     steering_alpha: float,
+    last_idx: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
-    Zero or additively steer one feature at every token position on a cloned tensor.
+    Zero or additively steer one feature on a cloned tensor.
+
+    `last_idx=None` (default) edits every token position, matching the
+    historical behaviour. Passing a `(batch,)` tensor of positions (from
+    `utils.last_real_token_index`) restricts the edit to just that one token per
+    row, so the intervention targets the same position the attribution actually
+    describes.
 
     Edits SAE *activation* space (the caller passes `sae.encode(resid_post)` and
     decodes the result), never probe weights.
     """
     acts = acts.clone()
+    if last_idx is None:
+        target = acts[..., feature_idx]
+    else:
+        batch_idx = torch.arange(acts.shape[0], device=acts.device)
+        target = acts[batch_idx, last_idx, feature_idx]
+
     if mode == "ablation":
-        acts[..., feature_idx] = 0.0
+        new_val = torch.zeros_like(target)
     elif mode == "steering":
-        acts[..., feature_idx] = acts[..., feature_idx] + steering_alpha
+        new_val = target + steering_alpha
     else:
         raise ValueError(f"Unknown mode={mode!r}; expected 'ablation' or 'steering'")
+
+    if last_idx is None:
+        acts[..., feature_idx] = new_val
+    else:
+        acts[batch_idx, last_idx, feature_idx] = new_val
     return acts
 
 
@@ -336,6 +354,7 @@ def get_model_intervention_effects(
     pos_token: str = POS_TOKEN,
     neg_token: str = NEG_TOKEN,
     batch_size: int = 32,
+    intervene_scope: str = "all",
 ) -> tuple[dict, dict]:
     """
     Intervene on SAE features at `layer` and measure Δ in sentiment logit difference.
@@ -346,12 +365,22 @@ def get_model_intervention_effects(
 
     candidate_indices must be *global* SAE feature ids.
 
+    `intervene_scope="all"` (default) edits every token position, matching the
+    historical behaviour. `"last"` edits only the last real token per row
+    (`utils.last_real_token_index`), matching the token position the
+    attribution was actually computed at; effect sizes from the two scopes are
+    not comparable.
+
     `alpha_by_feature` gives a per-feature alpha (see
     `utils.resolve_steering_alphas`); when None every feature gets
     `steering_alpha`. Ignored under mode="ablation".
     """
     if mode not in ("ablation", "steering"):
         raise ValueError(f"Unknown mode={mode!r}; expected 'ablation' or 'steering'")
+    if intervene_scope not in ("all", "last"):
+        raise ValueError(
+            f"Unknown intervene_scope={intervene_scope!r}; expected 'all' or 'last'"
+        )
 
     if isinstance(tokens_list, torch.Tensor) and tokens_list.ndim == 2:
         all_tokens = tokens_list
@@ -369,20 +398,22 @@ def get_model_intervention_effects(
     def recon_hook(resid_post, hook):
         return sae.decode(sae.encode(resid_post))
 
-    def score_batch(tokens: torch.Tensor, fwd_hooks: list) -> np.ndarray:
-        with torch.no_grad():
-            with model.hooks(fwd_hooks=fwd_hooks):
-                logits = model(tokens)
-            return last_non_pad_logit_diff(model, logits, tokens, pos_id, neg_id)
-
-    def score_all(fwd_hooks: list, desc: str) -> np.ndarray:
+    def score_all(hook_factory, desc: str) -> np.ndarray:
+        # hook_factory(batch_tokens) -> hook fn; lets the hook depend on which
+        # rows are in the current batch (needed for intervene_scope="last").
         chunks = []
         for start in tqdm(range(0, n, batch_size), desc=desc, leave=False):
             batch = all_tokens[start : start + batch_size].to(model.cfg.device)
-            chunks.append(score_batch(batch, fwd_hooks))
+            hook_fn = hook_factory(batch)
+            with torch.no_grad():
+                with model.hooks(fwd_hooks=[(intervene_point, hook_fn)]):
+                    logits = model(batch)
+                chunks.append(
+                    last_non_pad_logit_diff(model, logits, batch, pos_id, neg_id)
+                )
         return np.concatenate(chunks, axis=0)
 
-    baseline_scores = score_all([(intervene_point, recon_hook)], "Computing baselines")
+    baseline_scores = score_all(lambda batch: recon_hook, "Computing baselines")
 
     loop_desc = "Ablating features" if mode == "ablation" else "Steering features"
     for orig_idx in tqdm(candidate_indices, desc=loop_desc):
@@ -393,21 +424,28 @@ def get_model_intervention_effects(
             else float(alpha_by_feature[idx])
         )
 
-        def intervention_hook(
-            resid_post,
-            hook,
-            feature_idx=idx,
-            _mode=mode,
-            _steering_alpha=alpha_i,
+        def make_intervention_hook(
+            batch, feature_idx=idx, _mode=mode, _steering_alpha=alpha_i
         ):
-            acts = _apply_feature_intervention(
-                sae.encode(resid_post), feature_idx, _mode, _steering_alpha
+            last_idx = (
+                last_real_token_index(model, batch)
+                if intervene_scope == "last"
+                else None
             )
-            return sae.decode(acts)
 
-        intervened_scores = score_all(
-            [(intervene_point, intervention_hook)], f"feature {idx}"
-        )
+            def intervention_hook(resid_post, hook):
+                acts = _apply_feature_intervention(
+                    sae.encode(resid_post),
+                    feature_idx,
+                    _mode,
+                    _steering_alpha,
+                    last_idx=last_idx,
+                )
+                return sae.decode(acts)
+
+            return intervention_hook
+
+        intervened_scores = score_all(make_intervention_hook, f"feature {idx}")
         diffs = intervened_scores - baseline_scores
         delta_abs[idx] = float(np.mean(np.abs(diffs)))
         delta_signed[idx] = float(np.mean(diffs))
@@ -450,6 +488,17 @@ def parse_args() -> argparse.Namespace:
             "Append a Benjamini-Hochberg block to the table and write a "
             "faithfulness_<tag>_bh.json sidecar (does not alter the existing "
             "faithfulness_<tag>.txt body)"
+        ),
+    )
+    p.add_argument(
+        "--intervene-scope",
+        choices=("all", "last"),
+        default="all",
+        help=(
+            "'all' (default, historical) edits the feature at every token "
+            "position; 'last' edits only the last real token, matching the "
+            "position the attribution was computed at. Effect sizes between the "
+            "two scopes are not comparable. Must match global_linear/9_steer.py."
         ),
     )
     p.add_argument("--out-dir", type=Path, default=output_path("14_mlp_steer"))
@@ -562,6 +611,7 @@ if __name__ == "__main__":
         alpha_by_feature=alpha_by_feature,
         pos_token=POS_TOKEN,
         neg_token=NEG_TOKEN,
+        intervene_scope=args.intervene_scope,
     )
 
     label = "Ablated" if MODE == "ablation" else f"Steered ({alpha_desc})"
@@ -579,8 +629,15 @@ if __name__ == "__main__":
     header = (
         f"MLP arm - faithfulness\n"
         f"mode={MODE}  selection={SELECTION}  k={K}  seed={SEED}  "
-        f"n_eval={len(steer_eval_idx)}\n"
+        f"n_eval={len(steer_eval_idx)}  intervene_scope={args.intervene_scope}\n"
         f"alpha: {alpha_desc}\n"
+        + (
+            "NOTE: intervene_scope='last' edits only the last real token, not "
+            "every position - effect sizes are not comparable to the default "
+            "'all' scope runs.\n"
+            if args.intervene_scope == "last"
+            else ""
+        )
         + (
             "NOTE: selection='top' picks candidates by |SHAP|, which restricts "
             "SHAP's range on the scored set and biases its rho downward relative "
@@ -652,6 +709,7 @@ if __name__ == "__main__":
                 "k": K,
                 "seed": SEED,
                 "n_eval": int(len(steer_eval_idx)),
+                "intervene_scope": args.intervene_scope,
                 "delta_abs": {str(k): v for k, v in delta_abs.items()},
                 "delta_signed": {str(k): v for k, v in delta_signed.items()},
                 # Additive: absent for the historical selections, so old readers

@@ -1,0 +1,19 @@
+\begin{table}[h!]
+    \centering
+    \caption{Powered global faithfulness replication ($k=116$, steering, all filtered features, BH-corrected within arm).}
+    \label{tab:all-selection-faithfulness}
+    \begin{tabular}{llcc}
+    \toprule
+    Arm & Method & $\rho_\text{imp}$ ($q$) & $\rho_\text{dir}$ ($q$) \\
+    \midrule
+    Linear & SHAP/IG/GA & $+0.256$ ($q$=0.0111)* & $-0.054$ ($q$=0.563) \\
+    Linear & Probe      & $+0.096$ ($q$=0.487)  & $+0.410$ ($q$<0.0001)* \\
+    \midrule
+    MLP & SHAP           & $+0.279$ ($q$=0.0088)* & $-0.157$ ($q$=0.162) \\
+    MLP & Probe saliency & $-0.011$ ($q$=0.911) & n/a \\
+    MLP & IG             & $+0.278$ ($q$=0.0088)* & $-0.046$ ($q$=0.862) \\
+    MLP & GA             & $+0.197$ ($q$=0.0797) & $-0.031$ ($q$=0.862) \\
+    \bottomrule
+    \multicolumn{4}{l}{\footnotesize *survives FDR 0.05. Linear arm: 4/8 tests survive; MLP arm: 2/7.}
+    \end{tabular}
+    \end{table}
