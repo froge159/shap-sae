@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 import joblib
 
 _SRC = Path(__file__).resolve().parents[1]
@@ -58,7 +58,9 @@ def train_probe(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
 
 def evaluate_probe(probe: LogisticRegression, X_val: np.ndarray, y_val: np.ndarray, layer: int) -> dict:
     y_pred = probe.predict(X_val)
+    y_proba = probe.predict_proba(X_val)[:, 1]
     accuracy = accuracy_score(y_val, y_pred)
+    auroc = roc_auc_score(y_val, y_proba)
 
     weights = probe.coef_[0]
     n_nonzero = int(np.count_nonzero(weights))
@@ -73,6 +75,7 @@ def evaluate_probe(probe: LogisticRegression, X_val: np.ndarray, y_val: np.ndarr
     return {
         "layer": layer,
         "accuracy": float(accuracy),
+        "auroc": float(auroc),
         "n_nonzero_weights": n_nonzero,
         "n_features": int(len(weights)),
         "top_features": top_features,
@@ -96,6 +99,7 @@ def main():
 
         print(f"Layer {LAYER} probe results")
         print(f"  Val accuracy:        {results['accuracy']:.4f}")
+        print(f"  Val AUROC:           {results['auroc']:.4f}")
         print(f"  Non-zero weights:    {results['n_nonzero_weights']} / {results['n_features']}")
         print("  Top 20 features by |weight|:")
 
